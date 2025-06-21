@@ -114,6 +114,29 @@ export default function VideoAnalysis() {
         return;
       }
 
+      // Tavus Video Processing Integration
+      // ----------------------------------
+      // Example: Send videoBlob or uploadData.path to Tavus API for video analysis
+      // Replace the following with your actual Tavus API call
+      try {
+        // const tavusResult = await tavusAnalyze(videoBlob);
+        // console.log('Tavus video analysis result:', tavusResult);
+      } catch (err) {
+        console.error('Error with Tavus video analysis:', err);
+      }
+
+      // ElevenLabs Voice Analysis Integration
+      // -------------------------------------
+      // Example: Extract audio from videoBlob and send to ElevenLabs API for voice analysis
+      // Replace the following with your actual ElevenLabs API call
+      try {
+        // const elevenLabsResult = await elevenLabsAnalyze(videoBlob);
+        // console.log('ElevenLabs voice analysis result:', elevenLabsResult);
+      } catch (err) {
+        console.error('Error with ElevenLabs voice analysis:', err);
+      }
+      // ----------------------------------
+      
       // Here you would integrate with AI services:
       // 1. Tavus for video processing
       // 2. OpenAI/Claude for content analysis
@@ -184,6 +207,29 @@ export default function VideoAnalysis() {
         console.error('Upload error:', uploadError);
         return;
       }
+
+      // Tavus Video Processing Integration (Uploaded File)
+      // -------------------------------------------------
+      // Example: Send file or uploadData.path to Tavus API for video analysis
+      // Replace the following with your actual Tavus API call
+      try {
+        // const tavusResult = await tavusAnalyze(file);
+        // console.log('Tavus video analysis result (uploaded):', tavusResult);
+      } catch (err) {
+        console.error('Error with Tavus video analysis (uploaded):', err);
+      }
+
+      // ElevenLabs Voice Analysis Integration (Uploaded File)
+      // ----------------------------------------------------
+      // Example: Extract audio from file and send to ElevenLabs API for voice analysis
+      // Replace the following with your actual ElevenLabs API call
+      try {
+        // const elevenLabsResult = await elevenLabsAnalyze(file);
+        // console.log('ElevenLabs voice analysis result (uploaded):', elevenLabsResult);
+      } catch (err) {
+        console.error('Error with ElevenLabs voice analysis (uploaded):', err);
+      }
+      // ----------------------------------------------------
 
       // Analyze uploaded video (same process as recorded video)
       await analyzeVideo();

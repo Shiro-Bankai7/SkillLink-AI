@@ -198,8 +198,28 @@ export default function AICoachingSession() {
         });
       }
 
-      // Here you would send audio/video to AI services for analysis
-      // Example: ElevenLabs for voice analysis, OpenAI for content analysis
+      // ElevenLabs Voice Analysis Integration
+      // -------------------------------------
+      // Example: Send audioChunksRef.current to ElevenLabs API for voice analysis
+      // Replace the following with your actual ElevenLabs API call
+      try {
+        // const elevenLabsResult = await elevenLabsAnalyze(audioChunksRef.current);
+        // console.log('ElevenLabs voice analysis result:', elevenLabsResult);
+      } catch (err) {
+        console.error('Error with ElevenLabs voice analysis:', err);
+      }
+
+      // Tavus Video Processing Integration
+      // ----------------------------------
+      // Example: Send video stream or recorded video to Tavus API for video analysis
+      // Replace the following with your actual Tavus API call
+      try {
+        // const tavusResult = await tavusAnalyze(stream);
+        // console.log('Tavus video analysis result:', tavusResult);
+      } catch (err) {
+        console.error('Error with Tavus video analysis:', err);
+      }
+      // ----------------------------------
       
     } catch (error) {
       console.error('Error saving session:', error);
@@ -410,7 +430,12 @@ export default function AICoachingSession() {
                     </div>
                   </motion.div>
                 ))
-              )}
+              )} : (
+                <div className="text-center text-gray-500 py-8">
+                  <Brain className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">AI feedback will appear here during your session</p>
+                </div>
+              )
             </div>
           </div>
 
