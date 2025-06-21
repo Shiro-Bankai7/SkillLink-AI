@@ -21,6 +21,11 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { useConversation } from "@elevenlabs/react";
+
+const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
+const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
 
 interface CoachingFeedback {
   timestamp: number;
@@ -53,9 +58,29 @@ export default function AICoachingSession() {
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [voiceAgentResponse, setVoiceAgentResponse] = useState<string | null>(null);
+  const [voiceAgentLoading, setVoiceAgentLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  // ElevenLabs React SDK
+  const [voiceMessages, setVoiceMessages] = useState<any[]>([]);
+  const [voiceError, setVoiceError] = useState<any>(null);
+  const {
+    startSession: startVoiceSession,
+    endSession: endVoiceSession,
+    status: voiceStatus,
+    isSpeaking,
+    setVolume
+  } = useConversation({
+    onConnect: () => console.log("Connected to ElevenLabs agent!"),
+    onDisconnect: () => console.log("Disconnected from agent."),
+    onMessage: (msg: any) => setVoiceMessages(prev => [...prev, msg]),
+    onError: (err: any) => setVoiceError(err),
+  });
+
+  const [micAllowed, setMicAllowed] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -248,6 +273,14 @@ export default function AICoachingSession() {
       case 'improvement': return 'bg-orange-50 border-orange-200';
       case 'tip': return 'bg-blue-50 border-blue-200';
     }
+  };
+
+  const handleStartVoiceSession = async () => {
+    if (!micAllowed) {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicAllowed(true);
+    }
+    await startVoiceSession({ agentId: "agent_01jy82m97xe2nv83sdtfpfmepc" });
   };
 
   return (
@@ -468,6 +501,35 @@ export default function AICoachingSession() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Voice Coaching Session (AI Agent) */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Voice Coaching Session (AI Agent)</h3>
+            <button
+              className="bg-indigo-600 text-white px-4 py-2 rounded mb-2"
+              onClick={handleStartVoiceSession}
+              disabled={voiceStatus === 'connected'}
+            >
+              {voiceStatus === 'connected' ? 'Session Active' : 'Start Voice-to-Voice Session'}
+            </button>
+            <button
+              className="bg-gray-400 text-white px-4 py-2 rounded mb-2 ml-2"
+              onClick={endVoiceSession}
+              disabled={voiceStatus !== 'connected'}
+            >
+              End Session
+            </button>
+            <div className="min-h-[60px] text-gray-700">
+              <div>Status: {voiceStatus}</div>
+              <div>Speaking: {isSpeaking ? "Yes" : "No"}</div>
+              <div>
+                {voiceMessages && voiceMessages.map((msg: any, idx: number) => (
+                  <div key={idx}>{msg.text}</div>
+                ))}
+              </div>
+              {voiceError && <div className="text-red-500">{voiceError.message}</div>}
             </div>
           </div>
         </div>

@@ -37,6 +37,7 @@ import SmartMatchMaking from '../components/SmartMatchMaking';
 import SillySkillMode from '../components/SillySkillMode';
 import SessionReplays from '../components/SessionReplays';
 import VideoAnalysis from '../components/VideoAnalysis';
+import VoiceHelp from '../components/VoiceHelp';
 
 interface UserProfile {
   id: string;
@@ -264,6 +265,9 @@ export default function Dashboard() {
                 </button>
               </div>
             </motion.div>
+
+            {/* Voice Help AI Agent */}
+            <VoiceHelp />
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
