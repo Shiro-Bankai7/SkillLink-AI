@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
-
-// Placeholder for ElevenLabs and Tavus integration
-// You will provide the actual integration code and .env keys
+import { ElevenLabsService, TavusService } from '../services/aiServices';
 
 export default function ProfilePage() {
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
-  const [lookingFor, setLookingFor] = useState('');
+  const [lookingfor, setLookingFor] = useState('');
   const [role, setRole] = useState<'learner' | 'teacher' | 'both'>('both');
   const [voiceSample, setVoiceSample] = useState<File | null>(null);
   const [videoSample, setVideoSample] = useState<File | null>(null);
@@ -18,32 +16,60 @@ export default function ProfilePage() {
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) return;
-    await supabase.from('profiles').upsert({
+    // Ensure session is available and user is confirmed
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session || !session.user) {
+      setLoading(false);
+      alert('You must be logged in and have a confirmed email to update your profile. Please check your email for a confirmation link.');
+      return;
+    }
+    const user = session.user;
+    const { error } = await supabase.from('profiles').upsert({
       id: user.id,
       bio,
       skills,
-      lookingFor,
+      lookingfor,
       role,
+      plan: 'free', // Default to free plan
     });
     setLoading(false);
-    alert('Profile updated!');
+    if (error) {
+      alert('Profile update failed: ' + error.message);
+    } else {
+      alert('Profile updated!');
+    }
   };
 
   // Placeholder: Integrate ElevenLabs and Tavus here
   const handleVoiceAnalysis = async () => {
     if (!voiceSample) return;
-    // Use ElevenLabs API with your .env key
-    // Example: await elevenLabsAnalyze(voiceSample);
-    alert('Voice analysis (ElevenLabs) would run here.');
+    setLoading(true);
+    try {
+      const elevenLabs = new ElevenLabsService({
+        apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY,
+        voiceId: 'default',
+      });
+      const result = await elevenLabs.analyzeVoice(voiceSample);
+      alert('Voice analysis result: ' + JSON.stringify(result));
+    } catch (e) {
+      alert('Voice analysis failed.');
+    }
+    setLoading(false);
   };
 
   const handleVideoAnalysis = async () => {
     if (!videoSample) return;
-    // Use Tavus API with your .env key
-    // Example: await tavusAnalyze(videoSample);
-    alert('Video analysis (Tavus) would run here.');
+    setLoading(true);
+    try {
+      const tavus = new TavusService({
+        apiKey: import.meta.env.VITE_TAVUS_API_KEY,
+      });
+      const result = await tavus.analyzeVideo(videoSample);
+      alert('Video analysis result: ' + JSON.stringify(result));
+    } catch (e) {
+      alert('Video analysis failed.');
+    }
+    setLoading(false);
   };
 
   return (
@@ -73,7 +99,7 @@ export default function ProfilePage() {
           <label className="block font-medium mb-1">Looking For</label>
           <input
             className="w-full border rounded p-2"
-            value={lookingFor}
+            value={lookingfor}
             onChange={e => setLookingFor(e.target.value)}
             required
           />

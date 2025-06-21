@@ -9,7 +9,7 @@ const plans = [
   {
     id: 'pro_monthly',
     title: 'Pro Monthly',
-    price: '$109.64/mo',
+    price: '$9.64/mo',
     stripePriceId: 'prod_SWDbLUxbZNEl9P', // 💥 Replace with your real Stripe Price ID
     features: ['Unlimited barter', '3 AI tutors', 'Analytics'],
   },
@@ -53,23 +53,47 @@ export default function PricingPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 6 }}>
-      <Typography variant="h4" fontWeight="bold" textAlign="center" gutterBottom>
-        Choose Your Plan
-      </Typography>
-      <Typography textAlign="center" color="text.secondary" mb={6}>
-        Unlock full SkillLink AI power.
-      </Typography>
-
-      <Grid container spacing={4}>
-        {plans.map((plan) => (
-          <div className='plan-card md:flex-1' key={plan.id}>
-            <Card elevation={4}>
+      <Box sx={{ textAlign: 'center', mb: 6 }}>
+        <Typography variant="h3" fontWeight="bold" gutterBottom>
+          Unlock SkillLink AI Pro
+        </Typography>
+        <Typography color="text.secondary" fontSize={20}>
+          Get more value, more features, and more results. Choose your plan below.
+        </Typography>
+      </Box>
+      <Grid container spacing={4} justifyContent="center" alignItems="flex-end">
+        {/* Free Plan */}
+        <div className='md-4'>
+          <Card elevation={2} sx={{ border: '2px solid #e0e0e0', position: 'relative', minHeight: 420 }}>
+            <CardContent>
+              <Chip label="Current Plan" color="default" sx={{ position: 'absolute', top: 16, right: 16 }} />
+              <Typography variant="h5" fontWeight="bold" gutterBottom>Free</Typography>
+              <Typography variant="h4" fontWeight="bold" color="primary">$0</Typography>
+              <Typography color="text.secondary" mb={2}>Basic access to SkillLink AI</Typography>
+              <Divider sx={{ my: 2 }} />
+              <Box component="ul" sx={{ pl: 2, fontSize: '1rem', mb: 2 }}>
+                <li>3 skill exchanges/month</li>
+                <li>1 AI coaching session/month</li>
+                <li>Basic analytics</li>
+                <li>Community access</li>
+              </Box>
+            </CardContent>
+            <CardActions>
+              <Button fullWidth variant="outlined" disabled>Current Plan</Button>
+            </CardActions>
+          </Card>
+        </div>
+        {/* Paid Plans */}
+        {plans.map((plan, idx) => (
+          <div className='md-4' key={plan.id}>
+            <Card elevation={6} sx={{ border: '2px solid #6366f1', position: 'relative', minHeight: 420, background: 'linear-gradient(135deg, #e0e7ff 0%, #fff 100%)' }}>
               <CardContent>
-                <Chip label="Premium" color="primary" size="small" />
-                <Typography variant="h6" fontWeight="bold" mt={1}>{plan.title}</Typography>
-                <Typography color="text.secondary">{plan.price}</Typography>
-                <Divider sx={{ my: 1 }} />
-                <Box component="ul" sx={{ pl: 2, fontSize: '0.875rem' }}>
+                <Chip label="Premium" color="primary" sx={{ position: 'absolute', top: 16, right: 16 }} />
+                <Typography variant="h5" fontWeight="bold" gutterBottom>{plan.title}</Typography>
+                <Typography variant="h3" fontWeight="bold" color="primary.main">{plan.price}</Typography>
+                <Typography color="text.secondary" mb={2}>Unlock all features</Typography>
+                <Divider sx={{ my: 2 }} />
+                <Box component="ul" sx={{ pl: 2, fontSize: '1rem', mb: 2 }}>
                   {plan.features.map((f) => (
                     <li key={f}>✅ {f}</li>
                   ))}
@@ -78,16 +102,24 @@ export default function PricingPage() {
               <CardActions>
                 <Button
                   fullWidth
+                  size="large"
                   variant="contained"
-                  onClick={() => handleSubscribe()}
+                  color="primary"
+                  sx={{ fontWeight: 'bold', fontSize: 18, py: 1.5, borderRadius: 2, boxShadow: 2 }}
+                  onClick={handleSubscribe}
                 >
-                  Subscribe
+                  Upgrade to Pro
                 </Button>
               </CardActions>
             </Card>
           </div>
         ))}
       </Grid>
+      <Box sx={{ textAlign: 'center', mt: 8, color: 'text.secondary' }}>
+        <Typography variant="body2">
+          Cancel anytime. Your subscription is managed securely by RevenueCat.
+        </Typography>
+      </Box>
     </Container>
   );
 }

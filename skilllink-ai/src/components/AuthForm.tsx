@@ -36,7 +36,12 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
           }
         });
         if (!res.error) {
-          navigate('/create-profile');
+          // Check if user is confirmed
+          if (res.data.user && res.data.user.confirmed_at) {
+            navigate('/create-profile');
+          } else {
+            setError('Please check your email and confirm your account before continuing.');
+          }
         }
       } else {
         res = await supabase.auth.signInWithPassword({ email, password });

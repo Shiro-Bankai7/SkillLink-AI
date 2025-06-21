@@ -18,28 +18,34 @@ const allSkills = ['UI/UX', 'Public Speaking', 'Design', 'Programming', 'Sales',
 export default function CreateProfile() {
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
-  const [lookingFor, setLookingFor] = useState('');
+  const [lookingfor, setLookingFor] = useState('');
   const [role, setRole] = useState<'learner' | 'teacher' | 'both'>('both');
   const navigate = useNavigate();
 
   const handleSubmit = async () => {
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) return;
-
+    // Ensure session is available and user is confirmed
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session || !session.user) {
+      alert('You must be logged in and have a confirmed email to create your profile. Please check your email for a confirmation link.');
+      return;
+    }
+    const user = session.user;
     const { error } = await supabase
       .from('profiles')
       .upsert({
         id: user.id,
         bio,
         skills,
-        lookingFor,
+        lookingfor,
         role,
+        plan: 'free', // Default to free plan
       });
 
     if (!error) {
       navigate('/pricing');
     } else {
       console.error(error.message);
+      alert('Profile creation failed: ' + error.message);
     }
   };
 
@@ -77,7 +83,7 @@ export default function CreateProfile() {
         label="What are you looking to learn or exchange?"
         fullWidth
         margin="normal"
-        value={lookingFor}
+        value={lookingfor}
         onChange={(e) => setLookingFor(e.target.value)}
       />
 
