@@ -29,6 +29,8 @@ import {
   User,
   LogOut
 } from 'lucide-react';
+import { Dialog } from '@headlessui/react';
+
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import AICoachingSession from '../components/AICoachingSession';
@@ -38,12 +40,14 @@ import SillySkillMode from '../components/SillySkillMode';
 import SessionReplays from '../components/SessionReplays';
 import VideoAnalysis from '../components/VideoAnalysis';
 import VoiceHelp from '../components/VoiceHelp';
+import TavusConversationSession from '../components/TavusConversationSession';
+import UserProfile from '../components/UserProfile';
 
 interface UserProfile {
   id: string;
   bio: string;
   skills: string[];
-  lookingFor: string;
+  lookingfor: string | string[];
   role: 'learner' | 'teacher' | 'both';
   plan: string;
 }
@@ -75,6 +79,7 @@ export default function Dashboard() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [showProfile, setShowProfile] = useState(false);
   const [achievements] = useState<Achievement[]>([
     {
       id: '1',
@@ -101,6 +106,28 @@ export default function Dashboard() {
       progress: 30
     }
   ]);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return localStorage.getItem('skilllink_onboarding_complete') !== 'true';
+  });
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const onboardingSteps = [
+    {
+      title: 'Welcome to SkillLink AI!',
+      description: 'SkillLink AI is your gamified platform for real-time skill coaching, peer barter, and AI-powered feedback. Let’s take a quick tour!'
+    },
+    {
+      title: 'AI Coaching Sessions',
+      description: 'Practice with our AI coach for instant feedback on your speaking, body language, and more. Try the “AI Coaching” tab to get started.'
+    },
+    {
+      title: 'Skill Exchange',
+      description: 'Barter your skills 1-on-1 with peers via live video calls. Browse the Skill Exchange tab to find a match.'
+    },
+    {
+      title: 'Track Your Progress',
+      description: 'Earn achievements, track your growth, and unlock new features as you learn and teach!'
+    }
+  ];
 
   useEffect(() => {
     fetchProfile();
@@ -149,8 +176,6 @@ export default function Dashboard() {
 
   const stopRecording = () => {
     setIsRecording(false);
-    // Here you would integrate with ElevenLabs for voice analysis
-    // and Tavus for video processing
   };
 
   const formatTime = (seconds: number) => {
@@ -177,8 +202,86 @@ export default function Dashboard() {
     }
   };
 
+  const handleNextOnboarding = () => {
+    if (onboardingStep < onboardingSteps.length - 1) {
+      setOnboardingStep(onboardingStep + 1);
+    } else {
+      setShowOnboarding(false);
+      localStorage.setItem('skilllink_onboarding_complete', 'true');
+    }
+  };
+
+  const [showCreateTavus, setShowCreateTavus] = useState(false);
+  const [newTavusTopic, setNewTavusTopic] = useState('');
+  const [newTavusType, setNewTavusType] = useState<'teaching' | 'coaching'>('teaching');
+  const [createdTavus, setCreatedTavus] = useState<null | { topic: string; type: 'teaching' | 'coaching' }>(null);
+
+  if (showProfile) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setShowProfile(false)}
+                  className="text-indigo-600 hover:text-indigo-700 font-medium"
+                >
+                  ← Back to Dashboard
+                </button>
+              </div>
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={logout}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+        
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <UserProfile />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <Dialog open={showOnboarding} onClose={() => {}} className="fixed z-50 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-black bg-opacity-40" />
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-8 z-10">
+              <Dialog.Title className="text-2xl font-bold mb-2 text-indigo-700">
+                {onboardingSteps[onboardingStep].title}
+              </Dialog.Title>
+              <Dialog.Description className="mb-6 text-gray-600">
+                {onboardingSteps[onboardingStep].description}
+              </Dialog.Description>
+              <div className="flex justify-between items-center">
+                <div className="flex space-x-1">
+                  {onboardingSteps.map((_, idx) => (
+                    <span key={idx} className={`h-2 w-2 rounded-full ${idx === onboardingStep ? 'bg-indigo-500' : 'bg-gray-300'}`}></span>
+                  ))}
+                </div>
+                <button
+                  onClick={handleNextOnboarding}
+                  className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                >
+                  {onboardingStep === onboardingSteps.length - 1 ? 'Finish' : 'Next'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -224,9 +327,12 @@ export default function Dashboard() {
               </button>
               
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center">
+                <button
+                  onClick={() => setShowProfile(true)}
+                  className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center hover:bg-indigo-600 transition-colors"
+                >
                   <User className="w-4 h-4 text-white" />
-                </div>
+                </button>
                 <button
                   onClick={logout}
                   className="text-gray-500 hover:text-gray-700"
@@ -255,11 +361,17 @@ export default function Dashboard() {
                 Ready to level up your skills today? You have 2 upcoming sessions and 3 new skill matches.
               </p>
               <div className="flex flex-wrap gap-4">
-                <button className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center space-x-2">
+                <button 
+                  onClick={() => setActiveTab('practice')}
+                  className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center space-x-2"
+                >
                   <Video className="w-4 h-4" />
                   <span>Start AI Coaching</span>
                 </button>
-                <button className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center space-x-2">
+                <button 
+                  onClick={() => setActiveTab('community')}
+                  className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center space-x-2"
+                >
                   <Users className="w-4 h-4" />
                   <span>Find Skill Partners</span>
                 </button>
@@ -307,12 +419,15 @@ export default function Dashboard() {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">Upcoming Sessions</h3>
-                  <button className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+                  <button 
+                    onClick={() => setActiveTab('sessions')}
+                    className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                  >
                     View All
                   </button>
                 </div>
                 <div className="space-y-4">
-                  {sessions.filter(s => s.status === 'upcoming').map((session) => (
+                  {sessions.filter(s => s.status === 'upcoming').slice(0, 3).map((session) => (
                     <div key={session.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
                       <div className="flex-shrink-0">
                         {getTypeIcon(session.type)}
@@ -330,6 +445,12 @@ export default function Dashboard() {
                       </button>
                     </div>
                   ))}
+                  {sessions.filter(s => s.status === 'upcoming').length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No upcoming sessions</p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
 
@@ -341,7 +462,10 @@ export default function Dashboard() {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">Achievements</h3>
-                  <button className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+                  <button 
+                    onClick={() => setActiveTab('progress')}
+                    className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                  >
                     View All
                   </button>
                 </div>
@@ -383,7 +507,107 @@ export default function Dashboard() {
               <h2 className="text-2xl font-bold text-gray-900 mb-6">AI Coaching Studio</h2>
               <AICoachingSession />
             </motion.div>
-            {/* Skill Video Analysis */}
+
+            {/* Tavus Conversational AI Sessions */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-xl p-8 shadow-sm border border-gray-100"
+            >
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">AI Conversation Sessions</h2>
+              <div className="mb-6">
+                <button
+                  onClick={() => setShowCreateTavus(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium"
+                >
+                  + Create New Conversation
+                </button>
+              </div>
+              {showCreateTavus && (
+                <div className="mb-6 bg-gray-50 p-4 rounded-xl border flex flex-col md:flex-row md:items-end gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Topic/Skill</label>
+                    <input
+                      type="text"
+                      value={newTavusTopic}
+                      onChange={e => setNewTavusTopic(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      placeholder="e.g. Python, Marketing, Public Speaking"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <select
+                      value={newTavusType}
+                      onChange={e => setNewTavusType(e.target.value as 'teaching' | 'coaching')}
+                      className="px-3 py-2 border rounded-lg"
+                    >
+                      <option value="teaching">Teach</option>
+                      <option value="coaching">Learn</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => setCreatedTavus({ topic: newTavusTopic, type: newTavusType })}
+                    disabled={!newTavusTopic}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium mt-2 md:mt-0"
+                  >
+                    Start Session
+                  </button>
+                  <button
+                    onClick={() => setShowCreateTavus(false)}
+                    className="ml-2 text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Teaching Sessions */}
+                {profile?.skills && Array.isArray(profile.skills) && profile.skills.length > 0 && profile.skills.map((skill) => (
+                  <div key={skill}>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Teach: {skill}</h3>
+                    <TavusConversationSession
+                      sessionType="teaching"
+                      skillName={skill}
+                      onSessionEnd={(conversation) => {
+                        console.log('Teaching session ended:', conversation);
+                        fetchSessions();
+                      }}
+                    />
+                  </div>
+                ))}
+                {/* Coaching Sessions */}
+                {profile?.lookingfor && (
+                  (Array.isArray(profile.lookingfor) ? profile.lookingfor : [profile.lookingfor]).map((goal: string) => (
+                    <div key={goal}>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Learn: {goal}</h3>
+                      <TavusConversationSession
+                        sessionType="coaching"
+                        coachingType={goal}
+                        onSessionEnd={(conversation) => {
+                          console.log('Coaching session ended:', conversation);
+                          fetchSessions();
+                        }}
+                      />
+                    </div>
+                  ))
+                )}
+                {/* Created on demand */}
+                {createdTavus && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">{createdTavus.type === 'teaching' ? 'Teach' : 'Learn'}: {createdTavus.topic}</h3>
+                    <TavusConversationSession
+                      sessionType={createdTavus.type}
+                      skillName={createdTavus.type === 'teaching' ? createdTavus.topic : undefined}
+                      coachingType={createdTavus.type === 'coaching' ? createdTavus.topic : undefined}
+                      onSessionEnd={() => setCreatedTavus(null)}
+                    />
+                  </div>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Video Analysis */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

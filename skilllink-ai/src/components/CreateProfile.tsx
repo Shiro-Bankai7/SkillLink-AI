@@ -18,8 +18,16 @@ const allSkills = ['UI/UX', 'Public Speaking', 'Design', 'Programming', 'Sales',
 export default function CreateProfile() {
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
-  const [lookingfor, setLookingFor] = useState('');
+  const [lookingfor, setLookingfor] = useState('');
   const [role, setRole] = useState<'learner' | 'teacher' | 'both'>('both');
+  const [location, setLocation] = useState('');
+  const [website, setWebsite] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [github, setGithub] = useState('');
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [sessionReminders, setSessionReminders] = useState(true);
+  const [marketingEmails, setMarketingEmails] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async () => {
@@ -38,6 +46,14 @@ export default function CreateProfile() {
         skills,
         lookingfor,
         role,
+        location,
+        website,
+        social_links: { linkedin, twitter, github },
+        preferences: {
+          email_notifications: emailNotifications,
+          session_reminders: sessionReminders,
+          marketing_emails: marketingEmails
+        },
         plan: 'free', // Default to free plan
       });
 
@@ -84,8 +100,54 @@ export default function CreateProfile() {
         fullWidth
         margin="normal"
         value={lookingfor}
-        onChange={(e) => setLookingFor(e.target.value)}
+        onChange={(e) => setLookingfor(e.target.value)}
       />
+      <TextField
+        label="Location"
+        fullWidth
+        margin="normal"
+        value={location}
+        onChange={(e) => setLocation(e.target.value)}
+      />
+      <TextField
+        label="Website"
+        fullWidth
+        margin="normal"
+        value={website}
+        onChange={(e) => setWebsite(e.target.value)}
+      />
+      <TextField
+        label="LinkedIn"
+        fullWidth
+        margin="normal"
+        value={linkedin}
+        onChange={(e) => setLinkedin(e.target.value)}
+      />
+      <TextField
+        label="Twitter"
+        fullWidth
+        margin="normal"
+        value={twitter}
+        onChange={(e) => setTwitter(e.target.value)}
+      />
+      <TextField
+        label="GitHub"
+        fullWidth
+        margin="normal"
+        value={github}
+        onChange={(e) => setGithub(e.target.value)}
+      />
+      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+        <label>
+          <input type="checkbox" checked={emailNotifications} onChange={e => setEmailNotifications(e.target.checked)} /> Email Notifications
+        </label>
+        <label>
+          <input type="checkbox" checked={sessionReminders} onChange={e => setSessionReminders(e.target.checked)} /> Session Reminders
+        </label>
+        <label>
+          <input type="checkbox" checked={marketingEmails} onChange={e => setMarketingEmails(e.target.checked)} /> Marketing Emails
+        </label>
+      </Box>
 
       <TextField
         label="Your Role"

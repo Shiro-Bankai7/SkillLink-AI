@@ -74,6 +74,16 @@ export default function SmartMatchmaking() {
 
   useEffect(() => {
     fetchMatches();
+    // Subscribe to realtime updates on profiles for live matchmaking
+    const subscription = supabase
+      .channel('public:profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        fetchMatches();
+      })
+      .subscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [preferences]);
 
   const fetchMatches = async () => {
@@ -98,7 +108,7 @@ export default function SmartMatchmaking() {
           id,
           bio,
           skills,
-          lookingFor,
+          lookingfor,
           role,
           created_at,
           users!inner(email)
@@ -110,13 +120,13 @@ export default function SmartMatchmaking() {
 
       // AI-powered matching algorithm
       const matchedUsers = profiles.map(profile => {
-        const matchData = calculateMatchScore(userProfile, profile);
+        const matchData = calculateMatchScore(userProfile, profile) || { score: 0, reasons: [], complementarySkills: [], sharedInterests: [] };
         return {
           id: profile.id,
           name: profile.users?.[0]?.email?.split('@')[0] || 'Anonymous',
           avatar: profile.users?.[0]?.email?.substring(0, 2).toUpperCase() || 'AN',
           skills: profile.skills || [],
-          wantsToLearn: Array.isArray(profile.lookingFor) ? profile.lookingFor : [profile.lookingFor].filter(Boolean),
+          wantsToLearn: Array.isArray(profile.lookingfor) ? profile.lookingfor : [profile.lookingfor].filter(Boolean),
           rating: Math.random() * 1 + 4,
           reviewCount: Math.floor(Math.random() * 100) + 10,
           location: generateRandomLocation(),
@@ -158,9 +168,9 @@ export default function SmartMatchmaking() {
     const sharedInterests: string[] = [];
 
     const userSkills = userProfile.skills || [];
-    const userWants = Array.isArray(userProfile.lookingFor) ? userProfile.lookingFor : [userProfile.lookingFor].filter(Boolean);
+    const userWants = Array.isArray(userProfile.lookingfor) ? userProfile.lookingfor : [userProfile.lookingfor].filter(Boolean);
     const otherSkills = otherProfile.skills || [];
-    const otherWants = Array.isArray(otherProfile.lookingFor) ? otherProfile.lookingFor : [otherProfile.lookingFor].filter(Boolean);
+    const otherWants = Array.isArray(otherProfile.lookingfor) ? otherProfile.lookingfor : [otherProfile.lookingfor].filter(Boolean);
 
     // Skill complementarity (what user wants vs what other teaches)
     const skillMatches = userWants.filter((want: string) => 

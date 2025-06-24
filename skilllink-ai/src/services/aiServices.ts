@@ -218,6 +218,70 @@ export class TavusService {
   }
 }
 
+// Tavus Conversational AI Video API Utility
+export class TavusConversationAPI {
+  private apiKey: string;
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  async createConversation({
+    replica_id,
+    persona_id,
+    callback_url,
+    conversation_name,
+    conversational_context,
+    custom_greeting,
+    properties
+  }: any) {
+    const response = await fetch('https://tavusapi.com/v2/conversations', {
+      method: 'POST',
+      headers: {
+        'x-api-key': this.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        replica_id,
+        persona_id,
+        callback_url,
+        conversation_name,
+        conversational_context,
+        custom_greeting,
+        properties,
+      })
+    });
+    if (!response.ok) throw new Error('Tavus create conversation failed');
+    return response.json();
+  }
+
+  async getConversation(conversation_id: string) {
+    const response = await fetch(`https://tavusapi.com/v2/conversations/${conversation_id}`, {
+      method: 'GET',
+      headers: { 'x-api-key': this.apiKey }
+    });
+    if (!response.ok) throw new Error('Tavus get conversation failed');
+    return response.json();
+  }
+
+  async listConversations() {
+    const response = await fetch('https://tavusapi.com/v2/conversations', {
+      method: 'GET',
+      headers: { 'x-api-key': this.apiKey }
+    });
+    if (!response.ok) throw new Error('Tavus list conversations failed');
+    return response.json();
+  }
+
+  async endConversation(conversation_id: string) {
+    const response = await fetch(`https://tavusapi.com/v2/conversations/${conversation_id}/end`, {
+      method: 'POST',
+      headers: { 'x-api-key': this.apiKey }
+    });
+    if (!response.ok) throw new Error('Tavus end conversation failed');
+    return response.json();
+  }
+}
+
 // Web Speech API Service for Real-time Transcription
 export class SpeechRecognitionService {
   private recognition: any;
@@ -296,6 +360,10 @@ export class AIServicesFactory {
 
   static createSpeechRecognitionService(): SpeechRecognitionService {
     return new SpeechRecognitionService();
+  }
+
+  static createTavusConversationAPI(): TavusConversationAPI {
+    return new TavusConversationAPI(import.meta.env.VITE_TAVUS_API_KEY || '');
   }
 }
 

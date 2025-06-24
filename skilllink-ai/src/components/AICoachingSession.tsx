@@ -23,6 +23,7 @@ import {
 import { supabase } from '../services/supabase';
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { useConversation } from "@elevenlabs/react";
+import { TavusConversationAPI } from '../services/aiServices';
 
 const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
 const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
@@ -80,6 +81,13 @@ export default function AICoachingSession() {
     onError: (err: any) => setVoiceError(err),
   });
 
+  // Tavus integration state
+  const tavusApi = new TavusConversationAPI(import.meta.env.VITE_TAVUS_API_KEY || '');
+  const [tavusConversations, setTavusConversations] = useState<any[]>([]);
+  const [tavusLoading, setTavusLoading] = useState(false);
+  const [tavusError, setTavusError] = useState<string | null>(null);
+  const [activeTavusConversation, setActiveTavusConversation] = useState<any | null>(null);
+
   const [micAllowed, setMicAllowed] = useState(false);
 
   useEffect(() => {
@@ -92,6 +100,10 @@ export default function AICoachingSession() {
     }
     return () => clearInterval(interval);
   }, [isSessionActive]);
+
+  useEffect(() => {
+    fetchTavusConversations();
+  }, []);
 
   const updateMetrics = async () => {
     // Real-time metrics would be calculated from actual audio/video analysis
@@ -283,11 +295,80 @@ export default function AICoachingSession() {
     await startVoiceSession({ agentId: "agent_01jy82m97xe2nv83sdtfpfmepc" });
   };
 
+  const fetchTavusConversations = async () => {
+    setTavusLoading(true);
+    setTavusError(null);
+    try {
+      const res = await tavusApi.listConversations();
+      setTavusConversations(res.conversations || []);
+    } catch (e: any) {
+      setTavusError(e.message);
+    } finally {
+      setTavusLoading(false);
+    }
+  };
+
+  const startTavusConversation = async () => {
+    setTavusLoading(true);
+    setTavusError(null);
+    try {
+      const res = await tavusApi.createConversation({
+        replica_id: 'r79e1c033f',
+        persona_id: 'p5317866',
+        callback_url: window.location.origin + '/api/tavus-webhook',
+        conversation_name: 'SkillLink AI Session',
+        conversational_context: 'You are an AI coach for SkillLink. Help the user practice public speaking and answer questions.',
+        custom_greeting: 'Welcome to your SkillLink AI video session!',
+        properties: {
+          max_call_duration: 1800,
+          participant_left_timeout: 60,
+          participant_absent_timeout: 300,
+          enable_recording: true,
+          enable_closed_captions: true,
+          apply_greenscreen: false,
+          language: 'english',
+        }
+      });
+      console.log('Tavus createConversation response:', res); // Debug log
+      setActiveTavusConversation(res);
+      fetchTavusConversations();
+    } catch (e: any) {
+      setTavusError(e.message);
+    } finally {
+      setTavusLoading(false);
+    }
+  };
+
+  const endTavusConversation = async (conversationId: string) => {
+    setTavusLoading(true);
+    setTavusError(null);
+    try {
+      await tavusApi.endConversation(conversationId);
+      setActiveTavusConversation(null);
+      fetchTavusConversations();
+    } catch (e: any) {
+      setTavusError(e.message);
+    } finally {
+      setTavusLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Info Banner */}
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-6 text-white shadow mb-2">
+        <h2 className="text-2xl font-bold mb-1">Welcome to Your AI Coaching Session</h2>
+        <p className="mb-2">Practice your public speaking, interviewing, or teaching skills with real-time feedback from our AI coach. Enable your camera and mic, start a session, and receive instant tips on your delivery, confidence, and clarity. You can also try a voice-only or video AI session!</p>
+        <ul className="list-disc pl-5 text-indigo-100 text-sm">
+          <li>Start a session to activate live feedback and metrics.</li>
+          <li>Toggle your mic/camera/audio as needed.</li>
+          <li>Review AI feedback and session goals in the sidebar.</li>
+          <li>Try the AI video session for a more immersive experience.</li>
+        </ul>
+      </div>
       {/* Session Header */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <Brain className="w-6 h-6 text-indigo-600" />
@@ -297,56 +378,52 @@ export default function AICoachingSession() {
               <p className="text-gray-600">Real-time feedback powered by AI</p>
             </div>
           </div>
-          
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
             <div className="text-right">
               <div className="text-2xl font-bold text-gray-900">{formatTime(sessionTime)}</div>
               <div className="text-sm text-gray-500">Session Time</div>
             </div>
-            
-            {!isSessionActive ? (
-              <button
-                onClick={startSession}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2"
-              >
-                <Play className="w-4 h-4" />
-                <span>Start Session</span>
-              </button>
-            ) : (
-              <button
-                onClick={endSession}
-                className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2"
-              >
-                <Square className="w-4 h-4" />
-                <span>End Session</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {!isSessionActive ? (
+                <button
+                  onClick={startSession}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2"
+                >
+                  <Play className="w-4 h-4" />
+                  <span>Start Session</span>
+                </button>
+              ) : (
+                <button
+                  onClick={endSession}
+                  className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2"
+                >
+                  <Square className="w-4 h-4" />
+                  <span>End Session</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
-
-        {/* Controls */}
-        <div className="flex items-center space-x-4">
+        {/* Controls Grouped */}
+        <div className="flex flex-wrap items-center gap-3 mt-2 mb-2">
           <button
             onClick={() => setIsMicEnabled(!isMicEnabled)}
             className={`p-3 rounded-lg ${isMicEnabled ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-600'}`}
           >
             {isMicEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
           </button>
-          
           <button
             onClick={() => setIsCameraEnabled(!isCameraEnabled)}
             className={`p-3 rounded-lg ${isCameraEnabled ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-600'}`}
           >
             {isCameraEnabled ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
           </button>
-          
           <button
             onClick={() => setIsAudioEnabled(!isAudioEnabled)}
             className={`p-3 rounded-lg ${isAudioEnabled ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-600'}`}
           >
             {isAudioEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
           </button>
-          
           <button className="p-3 rounded-lg bg-gray-100 text-gray-700">
             <Settings className="w-5 h-5" />
           </button>
@@ -531,6 +608,151 @@ export default function AICoachingSession() {
               </div>
               {voiceError && <div className="text-red-500">{voiceError.message}</div>}
             </div>
+
+            {/* Tavus Conversations */}
+            <div className="mt-4">
+              <h4 className="text-md font-semibold text-gray-900 mb-2">Tavus Conversations</h4>
+              
+              {tavusLoading && <div className="text-gray-500">Loading conversations...</div>}
+              
+              {tavusError && <div className="text-red-500 text-sm">{tavusError}</div>}
+              
+              <div className="space-y-2">
+                {tavusConversations.map((conv) => (
+                  <div key={conv.conversation_id} className="p-3 rounded-lg bg-gray-50 border">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{conv.conversation_name}</div>
+                        <div className="text-xs text-gray-500">{conv.created_at}</div>
+                      </div>
+                      
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setActiveTavusConversation(conv)}
+                          className="bg-indigo-600 text-white px-3 py-1 rounded-md text-xs font-medium"
+                        >
+                          Resume
+                        </button>
+                        <button
+                          onClick={() => endTavusConversation(conv.conversation_id)}
+                          className="bg-red-500 text-white px-3 py-1 rounded-md text-xs font-medium"
+                        >
+                          End
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Active Conversation Details */}
+              {activeTavusConversation && (
+                <div className="mt-4 p-3 rounded-lg bg-gray-50 border">
+                  <div className="text-sm font-medium text-gray-900">Active Conversation</div>
+                  <div className="text-xs text-gray-500">{activeTavusConversation.conversation_name}</div>
+                  <div className="mt-2">
+                    <button
+                      onClick={() => endTavusConversation(activeTavusConversation.conversation_id)}
+                      className="bg-red-500 text-white px-4 py-2 rounded-md text-sm font-medium"
+                    >
+                      End Active Conversation
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tavus AI Video Session Controls */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Camera className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">AI Video Session (Tavus)</h2>
+              <p className="text-gray-600">Practice with a conversational AI video coach</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={startTavusConversation}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
+              disabled={tavusLoading}
+            >
+              <Play className="w-4 h-4" />
+              <span>Start AI Video Session</span>
+            </button>
+            {activeTavusConversation && (
+              <button
+                onClick={() => endTavusConversation(activeTavusConversation.id)}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
+                disabled={tavusLoading}
+              >
+                <Square className="w-4 h-4" />
+                <span>End Video Session</span>
+              </button>
+            )}
+          </div>
+        </div>
+        {tavusError && <div className="text-red-500 mb-2">{tavusError}</div>}
+        {tavusLoading && <div className="text-blue-500 mb-2">Loading...</div>}
+        {activeTavusConversation && (activeTavusConversation.join_url || activeTavusConversation.url) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+            <div className="relative w-[80vw] h-[80vh] bg-white rounded-2xl shadow-xl flex flex-col">
+              <div className="flex justify-between items-center p-4 border-b">
+                <div>
+                  <div className="font-semibold">Session: {activeTavusConversation.conversation_name}</div>
+                  <div className="text-xs text-gray-500">Status: {activeTavusConversation.status}</div>
+                </div>
+                <button
+                  onClick={() => endTavusConversation(activeTavusConversation.id || activeTavusConversation.conversation_id)}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium"
+                >
+                  End Video Session
+                </button>
+              </div>
+              <iframe
+                src={activeTavusConversation.join_url || activeTavusConversation.url}
+                title="Tavus AI Video Session"
+                allow="camera; microphone; fullscreen; autoplay"
+                className="flex-1 w-full h-full bg-black rounded-b-2xl"
+                frameBorder={0}
+              />
+            </div>
+          </div>
+        )}
+        <div className="mt-4">
+          <h3 className="font-semibold mb-2">Past AI Video Sessions</h3>
+          <div className="space-y-2">
+            {tavusConversations.length === 0 && <div className="text-gray-500">No past sessions found.</div>}
+            {tavusConversations.map((conv) => (
+              <div key={conv.id} className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{conv.conversation_name}</div>
+                  <div className="text-xs text-gray-500">{conv.status}</div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <a
+                    href={conv.join_url || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline text-sm"
+                  >
+                    View
+                  </a>
+                  <button
+                    onClick={() => endTavusConversation(conv.id)}
+                    className="text-red-500 text-xs font-medium hover:underline"
+                  >
+                    End
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

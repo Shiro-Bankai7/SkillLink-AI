@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Search, 
@@ -14,7 +14,8 @@ import {
   Share2,
   ChevronRight,
   Plus,
-  Globe
+  Globe,
+  Video
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
@@ -40,6 +41,10 @@ export default function SkillExchange() {
   const [providers, setProviders] = useState<SkillProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showOfferModal, setShowOfferModal] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [videoCallProvider, setVideoCallProvider] = useState<SkillProvider | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
   const skillCategories = [
     'All Skills',
@@ -69,10 +74,9 @@ export default function SkillExchange() {
           id,
           bio,
           skills,
-          lookingFor,
+          lookingfor,
           role,
           created_at,
-          email,
           users:users!inner(id),
           users:users!inner(email)
         `)
@@ -89,7 +93,7 @@ export default function SkillExchange() {
         name: profile.users?.[0]?.email?.split('@')[0] || 'Anonymous',
         avatar: profile.users?.[0]?.email?.substring(0, 2).toUpperCase() || 'AN',
         skills: profile.skills || [],
-        wantsToLearn: Array.isArray(profile.lookingFor) ? profile.lookingFor : [profile.lookingFor].filter(Boolean),
+        wantsToLearn: Array.isArray(profile.lookingfor) ? profile.lookingfor : [profile.lookingfor].filter(Boolean),
         rating: Math.random() * 1 + 4, // Random rating between 4-5
         reviewCount: Math.floor(Math.random() * 50) + 5,
         location: 'Remote', // Default location
@@ -165,6 +169,30 @@ export default function SkillExchange() {
       alert('Session scheduled! Check your dashboard for details.');
     } catch (error) {
       console.error('Error scheduling:', error);
+    }
+  };
+
+  const handleStartVideoCall = async (provider: SkillProvider) => {
+    setVideoCallProvider(provider);
+    setShowVideoCall(true);
+    // Start local camera for demo (replace with real peer connection for production)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setLocalStream(stream);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      alert('Could not access camera/mic.');
+    }
+  };
+
+  const handleEndVideoCall = () => {
+    setShowVideoCall(false);
+    setVideoCallProvider(null);
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      setLocalStream(null);
     }
   };
 
@@ -324,6 +352,14 @@ export default function SkillExchange() {
                   <span>Schedule</span>
                 </button>
                 
+                <button
+                  onClick={() => handleStartVideoCall(provider)}
+                  className="flex-1 lg:w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center space-x-2"
+                >
+                  <Video className="w-4 h-4" />
+                  <span>Start Video Call</span>
+                </button>
+                
                 <div className="flex space-x-2">
                   <button className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
                     <Heart className="w-4 h-4" />
@@ -381,6 +417,29 @@ export default function SkillExchange() {
                 Complete Profile
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Call Modal */}
+      {showVideoCall && videoCallProvider && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 flex flex-col items-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Video Call with {videoCallProvider.name}</h3>
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className="w-64 h-48 bg-black rounded-lg mb-4 border"
+            />
+            <p className="text-gray-600 mb-4">(Demo: This is your local camera preview. For real calls, integrate a service like Daily, Agora, or WebRTC peer connection.)</p>
+            <button
+              onClick={handleEndVideoCall}
+              className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg font-medium"
+            >
+              End Call
+            </button>
           </div>
         </div>
       )}

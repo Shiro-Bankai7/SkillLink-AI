@@ -17,44 +17,55 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState('');
   const navigate = useNavigate();
   const password = watch('password');
 
   const onSubmit = async (data: AuthFormData) => {
     setError('');
+    setSuccess('');
     setLoading(true);
     const { email, password } = data;
-    let res;
 
     try {
       if (mode === 'signup') {
-        res = await supabase.auth.signUp({ 
+        const { data: authData, error: authError } = await supabase.auth.signUp({ 
           email, 
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/create-profile`
           }
         });
-        if (!res.error) {
-          // Check if user is confirmed
-          if (res.data.user && res.data.user.confirmed_at) {
-            navigate('/create-profile');
-          } else {
-            setError('Please check your email and confirm your account before continuing.');
-          }
+
+        if (authError) {
+          setError(authError.message);
+          return;
+        }
+
+        if (authData.user && !authData.user.email_confirmed_at) {
+          setSuccess('Please check your email and click the confirmation link to complete your registration.');
+        } else if (authData.user && authData.user.email_confirmed_at) {
+          navigate('/create-profile');
         }
       } else {
-        res = await supabase.auth.signInWithPassword({ email, password });
-        if (!res.error) {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+          email, 
+          password 
+        });
+
+        if (authError) {
+          setError(authError.message);
+          return;
+        }
+
+        if (authData.user) {
           navigate('/dashboard');
         }
       }
-
-      if (res.error) {
-        setError(res.error.message);
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -62,17 +73,50 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    const redirectTo = mode === 'signup' ? '/create-profile' : '/dashboard';
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}${redirectTo}`,
-      },
-    });
-    if (error) {
-      setError(error.message);
+    setError('');
+    
+    try {
+      const redirectTo = mode === 'signup' ? '/create-profile' : '/dashboard';
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}${redirectTo}`,
+        },
+      });
+      
+      if (error) {
+        setError(error.message);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google sign-in failed');
+    } finally {
       setLoading(false);
     }
+  };
+
+  const handleResendConfirmation = async () => {
+    setResendLoading(true);
+    setResendSuccess('');
+    setError('');
+    const email = watch('email');
+    if (!email) {
+      setError('Please enter your email above first.');
+      setResendLoading(false);
+      return;
+    }
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/create-profile`
+      }
+    });
+    if (resendError) {
+      setError(resendError.message);
+    } else {
+      setResendSuccess('Confirmation email resent! Please check your inbox.');
+    }
+    setResendLoading(false);
   };
 
   return (
@@ -191,6 +235,28 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
                   <p className="text-red-500 text-sm">{errors.confirmPassword.message}</p>
                 )}
               </div>
+            )}
+
+            {/* Success Message */}
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-3 bg-green-50 border border-green-200 rounded-xl"
+              >
+                <p className="text-green-600 text-sm text-center">{success}</p>
+                {mode === 'signup' && (
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={resendLoading}
+                    className="mt-2 text-indigo-600 hover:underline text-sm font-medium"
+                  >
+                    {resendLoading ? 'Resending...' : 'Resend confirmation email'}
+                  </button>
+                )}
+                {resendSuccess && <p className="text-green-700 text-xs mt-1">{resendSuccess}</p>}
+              </motion.div>
             )}
 
             {/* Error Message */}
