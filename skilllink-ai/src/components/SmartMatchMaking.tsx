@@ -25,6 +25,7 @@ import { skillsDatabase, getSkillById } from '../data/skillsDatabase';
 interface MatchedUser {
   id: string;
   name: string;
+  email: string;
   avatar: string;
   skills: string[];
   wantsToLearn: string[];
@@ -74,16 +75,6 @@ export default function SmartMatchmaking() {
 
   useEffect(() => {
     fetchMatches();
-    // Subscribe to realtime updates on profiles for live matchmaking
-    const subscription = supabase
-      .channel('public:profiles')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        fetchMatches();
-      })
-      .subscribe();
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [preferences]);
 
   const fetchMatches = async () => {
@@ -101,18 +92,10 @@ export default function SmartMatchmaking() {
         .eq('id', user.user.id)
         .single();
 
-      // Get potential matches
+      // Get potential matches (no join, correct fields)
       const { data: profiles } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          bio,
-          skills,
-          lookingfor,
-          role,
-          created_at,
-          users!inner(email)
-        `)
+        .select('*')
         .neq('id', user.user.id)
         .neq('role', 'learner');
 
@@ -120,16 +103,17 @@ export default function SmartMatchmaking() {
 
       // AI-powered matching algorithm
       const matchedUsers = profiles.map(profile => {
-        const matchData = calculateMatchScore(userProfile, profile) || { score: 0, reasons: [], complementarySkills: [], sharedInterests: [] };
+        const matchData = calculateMatchScore(userProfile, profile);
         return {
           id: profile.id,
-          name: profile.users?.[0]?.email?.split('@')[0] || 'Anonymous',
-          avatar: profile.users?.[0]?.email?.substring(0, 2).toUpperCase() || 'AN',
+          name: profile.email?.split('@')[0] || 'Anonymous',
+          email: profile.email || '',
+          avatar: profile.email?.substring(0, 2).toUpperCase() || 'AN',
           skills: profile.skills || [],
           wantsToLearn: Array.isArray(profile.lookingfor) ? profile.lookingfor : [profile.lookingfor].filter(Boolean),
           rating: Math.random() * 1 + 4,
           reviewCount: Math.floor(Math.random() * 100) + 10,
-          location: generateRandomLocation(),
+          location: profile.location || generateRandomLocation(),
           timezone: generateRandomTimezone(),
           availability: generateRandomAvailability(),
           bio: profile.bio || 'Passionate about sharing knowledge and learning new skills!',
@@ -470,7 +454,9 @@ export default function SmartMatchmaking() {
                       </span>
                     ))}
                   </div>
-                  
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded" title={match.email}>📧 {match.email}</span>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
                     <div className="flex items-center space-x-1">
                       <Star className="w-4 h-4 text-yellow-400 fill-current" />
@@ -489,19 +475,18 @@ export default function SmartMatchmaking() {
                       <span>{match.successRate}% success rate</span>
                     </div>
                   </div>
-                  
                   <p className="text-gray-600 text-sm mb-4">{match.bio}</p>
                   
                   {/* Match Reasons */}
                   <div className="mb-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Why you're a great match:</h4>
                     <div className="space-y-1">
-                      {match.matchReasons.map((reason, idx) => (
+                      {match.matchReasons.length > 0 ? match.matchReasons.map((reason, idx) => (
                         <div key={idx} className="flex items-center space-x-2 text-sm text-green-700">
                           <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
                           <span>{reason}</span>
                         </div>
-                      ))}
+                      )) : <span className="text-xs text-gray-400">No specific reasons found.</span>}
                     </div>
                   </div>
                   
@@ -510,12 +495,12 @@ export default function SmartMatchmaking() {
                     <div>
                       <span className="text-sm font-medium text-gray-700">Teaches:</span>
                       <div className="flex flex-wrap gap-2 mt-1">
-                        {match.skills.slice(0, 4).map((skill, idx) => (
+                        {match.skills && match.skills.length > 0 ? match.skills.slice(0, 4).map((skill, idx) => (
                           <span key={idx} className="px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">
                             {skill}
                           </span>
-                        ))}
-                        {match.skills.length > 4 && (
+                        )) : <span className="px-3 py-1 bg-gray-100 text-gray-600 text-sm rounded-full">No skills listed</span>}
+                        {match.skills && match.skills.length > 4 && (
                           <span className="px-3 py-1 bg-gray-100 text-gray-600 text-sm rounded-full">
                             +{match.skills.length - 4} more
                           </span>
@@ -523,7 +508,7 @@ export default function SmartMatchmaking() {
                       </div>
                     </div>
                     
-                    {match.wantsToLearn.length > 0 && (
+                    {match.wantsToLearn && match.wantsToLearn.length > 0 && (
                       <div>
                         <span className="text-sm font-medium text-gray-700">Wants to learn:</span>
                         <div className="flex flex-wrap gap-2 mt-1">
@@ -613,6 +598,9 @@ export default function SmartMatchmaking() {
                   <div className="flex items-center space-x-2 mt-1">
                     <Star className="w-4 h-4 text-yellow-400 fill-current" />
                     <span className="text-sm text-gray-600">{selectedMatch.rating.toFixed(1)} ({selectedMatch.reviewCount} reviews)</span>
+                  </div>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded" title={selectedMatch.email}>📧 {selectedMatch.email}</span>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {selectedMatch.badges.map((badge, idx) => (

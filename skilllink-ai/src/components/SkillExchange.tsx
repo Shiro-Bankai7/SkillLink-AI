@@ -22,6 +22,7 @@ import { supabase } from '../services/supabase';
 interface SkillProvider {
   id: string;
   name: string;
+  email: string;
   avatar: string;
   skills: string[];
   wantsToLearn: string[];
@@ -32,7 +33,6 @@ interface SkillProvider {
   bio: string;
   badges: string[];
   isOnline: boolean;
-  email?: string;
 }
 
 export default function SkillExchange() {
@@ -66,43 +66,39 @@ export default function SkillExchange() {
   const fetchSkillProviders = async () => {
     try {
       setLoading(true);
-      
-      // Fetch profiles from Supabase
+      // Fetch all profiles, no join, correct field usage
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          bio,
-          skills,
-          lookingfor,
-          role,
-          created_at,
-          users:users!inner(id),
-          users:users!inner(email)
-        `)
-        .neq('role', 'learner'); // Only show teachers and both
+        .select('*')
+        .neq('role', 'learner');
 
       if (error) {
         console.error('Error fetching profiles:', error);
         return;
       }
 
-      // Transform data to match SkillProvider interface
-      const transformedProviders: SkillProvider[] = profiles?.map(profile => ({
-        id: profile.id,
-        name: profile.users?.[0]?.email?.split('@')[0] || 'Anonymous',
-        avatar: profile.users?.[0]?.email?.substring(0, 2).toUpperCase() || 'AN',
-        skills: profile.skills || [],
-        wantsToLearn: Array.isArray(profile.lookingfor) ? profile.lookingfor : [profile.lookingfor].filter(Boolean),
-        rating: Math.random() * 1 + 4, // Random rating between 4-5
-        reviewCount: Math.floor(Math.random() * 50) + 5,
-        location: 'Remote', // Default location
-        availability: ['Weekends', 'Evenings', 'Flexible', 'Mornings'][Math.floor(Math.random() * 4)],
-        bio: profile.bio || 'Passionate about sharing knowledge and learning new skills!',
-        badges: profile.role === 'teacher' ? ['Expert Teacher'] : ['Skill Exchanger'],
-        isOnline: Math.random() > 0.5,
-        email: profile.users?.[0]?.email
-      })) || [];
+      // Exclude current user from results
+      const { data: user } = await supabase.auth.getUser();
+      const currentUserId = user?.user?.id;
+
+      // Map profiles to SkillProvider interface
+      const transformedProviders: SkillProvider[] = profiles
+        ?.filter(profile => profile.id !== currentUserId)
+        ?.map(profile => ({
+          id: profile.id,
+          name: profile.email?.split('@')[0] || 'Anonymous',
+          email: profile.email || '',
+          avatar: profile.email?.substring(0, 2).toUpperCase() || 'AN',
+          skills: profile.skills || [],
+          wantsToLearn: Array.isArray(profile.lookingfor) ? profile.lookingfor : [profile.lookingfor].filter(Boolean),
+          rating: Math.random() * 1 + 4, // Random rating between 4-5
+          reviewCount: Math.floor(Math.random() * 50) + 5,
+          location: profile.location || 'Remote',
+          availability: ['Weekends', 'Evenings', 'Flexible', 'Mornings'][Math.floor(Math.random() * 4)],
+          bio: profile.bio || 'Passionate about sharing knowledge and learning new skills!',
+          badges: profile.role === 'teacher' ? ['Expert Teacher'] : ['Skill Exchanger'],
+          isOnline: Math.random() > 0.5,
+        })) || [];
 
       setProviders(transformedProviders);
     } catch (error) {
