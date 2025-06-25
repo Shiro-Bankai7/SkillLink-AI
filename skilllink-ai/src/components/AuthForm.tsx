@@ -77,7 +77,7 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
     
     try {
       const redirectTo = mode === 'signup' ? '/create-profile' : '/dashboard';
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}${redirectTo}`,
@@ -86,7 +86,25 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
       
       if (error) {
         setError(error.message);
+        return;
       }
+      // Wait for session to be available after redirect
+      setTimeout(async () => {
+        const session = (await supabase.auth.getSession()).data.session;
+        const user = session?.user;
+        if (user) {
+          // Upsert user info into profiles table
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            email: user.email,
+            bio: '',
+            skills: [],
+            lookingfor: '',
+            role: 'both',
+            plan: 'free',
+          });
+        }
+      }, 2000);
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed');
     } finally {

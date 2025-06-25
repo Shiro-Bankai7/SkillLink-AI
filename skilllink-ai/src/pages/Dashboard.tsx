@@ -33,7 +33,7 @@ import { Dialog } from '@headlessui/react';
 
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
-import AICoachingSession from '../components/AICoachingSession';
+import ConversationCoach from '../components/AICoachingSession';
 import SkillExchange from '../components/SkillExchange';
 import SmartMatchMaking from '../components/SmartMatchMaking';
 import SillySkillMode from '../components/SillySkillMode';
@@ -42,6 +42,7 @@ import VideoAnalysis from '../components/VideoAnalysis';
 import VoiceHelp from '../components/VoiceHelp';
 import TavusConversationSession from '../components/TavusConversationSession';
 import UserProfile from '../components/UserProfile';
+import { showNotification } from '../utils/notification';
 
 interface UserProfile {
   id: string;
@@ -128,6 +129,13 @@ export default function Dashboard() {
       description: 'Earn achievements, track your growth, and unlock new features as you learn and teach!'
     }
   ];
+
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: 'Welcome to SkillLink!', body: 'Start your first AI coaching session.' },
+    { id: 2, title: 'Streak Unlocked!', body: 'You are on a 3-day practice streak.' },
+    // Add more or fetch from backend
+  ]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -251,6 +259,7 @@ export default function Dashboard() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       {/* Onboarding Modal */}
       {showOnboarding && (
@@ -294,6 +303,7 @@ export default function Dashboard() {
                 <h1 className="text-xl font-bold text-gray-900">SkillLink AI</h1>
               </div>
               
+              {/* Desktop Nav */}
               <div className="hidden md:flex items-center space-x-1">
                 {['overview', 'sessions', 'practice', 'community', 'progress'].map((tab) => (
                   <button
@@ -321,9 +331,32 @@ export default function Dashboard() {
                 />
               </div>
               
-              <button className="relative p-2 text-gray-400 hover:text-gray-500">
+              <button
+                className="relative p-2 text-gray-400 hover:text-gray-500"
+                onClick={() => setShowNotifications((prev) => !prev)}
+              >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400"></span>
+                {notifications.length > 0 && (
+                  <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400"></span>
+                )}
+                {/* Notification Dropdown */}
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+                    <div className="p-4 border-b font-semibold text-gray-900">Notifications</div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-4 text-gray-500 text-sm">No notifications.</div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div key={notif.id} className="p-4 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer">
+                            <div className="font-medium text-gray-800">{notif.title}</div>
+                            <div className="text-gray-600 text-sm">{notif.body}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </button>
               
               <div className="flex items-center space-x-2">
@@ -498,14 +531,14 @@ export default function Dashboard() {
 
         {activeTab === 'practice' && (
           <div className="space-y-8">
-            {/* AI Coaching Studio */}
+            {/* Conversation Coach Studio */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-white rounded-xl p-8 shadow-sm border border-gray-100"
             >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">AI Coaching Studio</h2>
-              <AICoachingSession />
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Conversation Coach</h2>
+              <ConversationCoach />
             </motion.div>
 
             {/* Tavus Conversational AI Sessions */}
@@ -798,5 +831,27 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+    {/* Mobile Bottom Nav */}
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 flex md:hidden justify-around py-2 shadow-lg">
+      {[
+        { id: 'overview', label: 'Home', icon: Zap },
+        { id: 'sessions', label: 'Sessions', icon: Calendar },
+        { id: 'practice', label: 'Practice', icon: Video },
+        { id: 'community', label: 'Community', icon: Users },
+        { id: 'progress', label: 'Progress', icon: BarChart3 },
+      ].map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          className={`flex flex-col items-center flex-1 px-1 py-1 text-xs font-medium capitalize transition-colors ${
+            activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-500'
+          }`}
+        >
+          <tab.icon className={`w-6 h-6 mb-1 ${activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400'}`} />
+          {tab.label}
+        </button>
+      ))}
+    </nav>
+    </>
   );
 }

@@ -24,7 +24,7 @@ interface UserProfile {
   id: string;
   bio: string;
   skills: string[];
-  lookingFor: string;
+  lookingfor: string;
   role: 'learner' | 'teacher' | 'both';
   plan: string;
   created_at: string;
@@ -49,11 +49,17 @@ export default function UserProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState(() => {
+    // Persist active tab in localStorage
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('userProfileActiveTab') || 'profile';
+    }
+    return 'profile';
+  });
   const [editForm, setEditForm] = useState({
     bio: '',
     skills: [] as string[],
-    lookingFor: '',
+    lookingfor: '',
     role: 'both' as 'learner' | 'teacher' | 'both',
     location: '',
     website: '',
@@ -95,7 +101,7 @@ export default function UserProfile() {
         setEditForm({
           bio: data.bio || '',
           skills: data.skills || [],
-          lookingFor: data.lookingFor || '',
+          lookingfor: data.lookingfor || '',
           role: data.role || 'both',
           location: data.location || '',
           website: data.website || '',
@@ -149,7 +155,7 @@ export default function UserProfile() {
       setEditForm({
         bio: profile.bio || '',
         skills: profile.skills || [],
-        lookingFor: profile.lookingFor || '',
+        lookingfor: profile.lookingfor || '',
         role: profile.role || 'both',
         location: profile.location || '',
         website: profile.website || '',
@@ -174,10 +180,7 @@ export default function UserProfile() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({
-          preferences,
-          updated_at: new Date().toISOString()
-        })
+        .update({ preferences }) // removed updated_at
         .eq('id', user.id);
 
       if (error) {
@@ -190,6 +193,13 @@ export default function UserProfile() {
       console.error('Error updating preferences:', error);
     }
   };
+
+  // Persist activeTab to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('userProfileActiveTab', activeTab);
+    }
+  }, [activeTab]);
 
   if (loading) {
     return (
@@ -341,13 +351,13 @@ export default function UserProfile() {
                 {isEditing ? (
                   <input
                     type="text"
-                    value={editForm.lookingFor}
-                    onChange={(e) => setEditForm({ ...editForm, lookingFor: e.target.value })}
+                    value={editForm.lookingfor}
+                    onChange={(e) => setEditForm({ ...editForm, lookingfor: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     placeholder="What skills do you want to learn?"
                   />
                 ) : (
-                  <p className="text-gray-900">{profile?.lookingFor || 'Nothing specified yet.'}</p>
+                  <p className="text-gray-900">{profile?.lookingfor || 'Nothing specified yet.'}</p>
                 )}
               </div>
 

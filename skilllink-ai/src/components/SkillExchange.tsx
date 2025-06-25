@@ -18,6 +18,7 @@ import {
   Video
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SkillProvider {
   id: string;
@@ -36,8 +37,18 @@ interface SkillProvider {
 }
 
 export default function SkillExchange() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSkill, setSelectedSkill] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('skillExchangeSearchTerm') || '';
+    }
+    return '';
+  });
+  const [selectedSkill, setSelectedSkill] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('skillExchangeSelectedSkill') || '';
+    }
+    return '';
+  });
   const [providers, setProviders] = useState<SkillProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -45,6 +56,14 @@ export default function SkillExchange() {
   const [videoCallProvider, setVideoCallProvider] = useState<SkillProvider | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [showOfferSkillsModal, setShowOfferSkillsModal] = useState(false);
+  const [offerSkill, setOfferSkill] = useState('');
+  const [offerDescription, setOfferDescription] = useState('');
+  const [offerSubmitting, setOfferSubmitting] = useState(false);
+  const [offerSuccess, setOfferSuccess] = useState('');
 
   const skillCategories = [
     'All Skills',
@@ -63,10 +82,21 @@ export default function SkillExchange() {
     fetchSkillProviders();
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
   const fetchSkillProviders = async () => {
     try {
       setLoading(true);
-      // Fetch all profiles, no join, correct field usage
+      
+      // Get current user to exclude from results
+      const { data: user } = await supabase.auth.getUser();
+      const currentUserId = user?.user?.id;
+
+      // Fetch profiles from Supabase
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*')
@@ -77,11 +107,7 @@ export default function SkillExchange() {
         return;
       }
 
-      // Exclude current user from results
-      const { data: user } = await supabase.auth.getUser();
-      const currentUserId = user?.user?.id;
-
-      // Map profiles to SkillProvider interface
+      // Transform data to match SkillProvider interface
       const transformedProviders: SkillProvider[] = profiles
         ?.filter(profile => profile.id !== currentUserId)
         ?.map(profile => ({
@@ -107,6 +133,26 @@ export default function SkillExchange() {
       setLoading(false);
     }
   };
+
+  const fetchUserProfile = async () => {
+    setProfileLoading(true);
+    try {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (!error && data) setProfile(data);
+    } catch (e) {
+      // ignore
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  // Helper: is profile complete?
+  const isProfileComplete = profile && profile.bio && profile.skills && profile.skills.length > 0 && profile.lookingfor && profile.lookingfor.length > 0;
 
   const filteredProviders = providers.filter(provider => {
     const matchesSearch = provider.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -191,6 +237,18 @@ export default function SkillExchange() {
       setLocalStream(null);
     }
   };
+
+  // Persist searchTerm and selectedSkill to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('skillExchangeSearchTerm', searchTerm);
+    }
+  }, [searchTerm]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('skillExchangeSelectedSkill', selectedSkill);
+    }
+  }, [selectedSkill]);
 
   if (loading) {
     return (
@@ -393,26 +451,139 @@ export default function SkillExchange() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Offer Your Skills</h3>
-            <p className="text-gray-600 mb-4">
-              Complete your profile to start offering your skills to the community.
-            </p>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowOfferModal(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowOfferModal(false);
-                  // Navigate to profile completion
+            {profileLoading ? (
+              <p className="text-gray-600 mb-4">Loading your profile...</p>
+            ) : !isProfileComplete ? (
+              <>
+                <p className="text-gray-600 mb-4">
+                  Complete your profile to start offering your skills to the community.
+                </p>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowOfferModal(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowOfferModal(false);
+                      window.location.href = '/create-profile';
+                    }}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium"
+                  >
+                    Complete Profile
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-600 mb-4">
+                  Your profile is complete! You can now offer your skills to the community.
+                </p>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowOfferModal(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowOfferModal(false);
+                      setShowOfferSkillsModal(true);
+                    }}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium"
+                  >
+                    Offer Skills
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Offer Skills Real Modal */}
+      {showOfferSkillsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Submit a Skill Offer</h3>
+            {offerSuccess ? (
+              <div className="mb-4 text-green-600 font-medium">{offerSuccess}</div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setOfferSubmitting(true);
+                  setOfferSuccess('');
+                  if (!user) {
+                    setOfferSuccess('You must be logged in to submit an offer.');
+                    setOfferSubmitting(false);
+                    return;
+                  }
+                  try {
+                    await supabase.from('skill_offers').insert({
+                      user_id: user.id,
+                      skill: offerSkill,
+                      description: offerDescription,
+                      created_at: new Date().toISOString(),
+                    });
+                    setOfferSuccess('Skill offer submitted!');
+                    setOfferSkill('');
+                    setOfferDescription('');
+                    setTimeout(() => {
+                      setShowOfferSkillsModal(false);
+                      setOfferSuccess('');
+                    }, 1200);
+                  } catch (err) {
+                    setOfferSuccess('Failed to submit offer.');
+                  } finally {
+                    setOfferSubmitting(false);
+                  }
                 }}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium"
+                className="space-y-4"
               >
-                Complete Profile
-              </button>
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Skill</label>
+                  <input
+                    type="text"
+                    value={offerSkill}
+                    onChange={e => setOfferSkill(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="What skill are you offering?"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    value={offerDescription}
+                    onChange={e => setOfferDescription(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Describe your skill and what you can help with..."
+                    required
+                  />
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowOfferSkillsModal(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={offerSubmitting}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                  >
+                    {offerSubmitting ? 'Submitting...' : 'Submit Offer'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

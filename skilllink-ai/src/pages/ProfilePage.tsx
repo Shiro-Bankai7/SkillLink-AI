@@ -6,7 +6,7 @@ import { ElevenLabsService, TavusService } from '../services/aiServices';
 export default function ProfilePage() {
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
-  const [lookingfor, setLookingFor] = useState('');
+  const [lookingfor, setLookingfor] = useState('');
   const [role, setRole] = useState<'learner' | 'teacher' | 'both'>('both');
   const [voiceSample, setVoiceSample] = useState<File | null>(null);
   const [videoSample, setVideoSample] = useState<File | null>(null);
@@ -76,6 +76,7 @@ export default function ProfilePage() {
     <div className="max-w-xl mx-auto py-10 space-y-8">
       <h1 className="text-3xl font-bold mb-6">Complete Your Profile</h1>
       <form onSubmit={handleProfileSubmit} className="space-y-4 bg-white p-6 rounded-xl shadow">
+        {/* Bio */}
         <div>
           <label className="block font-medium mb-1">Bio</label>
           <textarea
@@ -86,6 +87,7 @@ export default function ProfilePage() {
             required
           />
         </div>
+        {/* Skills */}
         <div>
           <label className="block font-medium mb-1">Skills (comma separated)</label>
           <input
@@ -95,15 +97,17 @@ export default function ProfilePage() {
             required
           />
         </div>
+        {/* Looking For */}
         <div>
           <label className="block font-medium mb-1">Looking For</label>
           <input
             className="w-full border rounded p-2"
             value={lookingfor}
-            onChange={e => setLookingFor(e.target.value)}
+            onChange={e => setLookingfor(e.target.value)}
             required
           />
         </div>
+        {/* Role */}
         <div>
           <label className="block font-medium mb-1">Role</label>
           <select
@@ -124,7 +128,7 @@ export default function ProfilePage() {
           {loading ? 'Saving...' : 'Save Profile'}
         </button>
       </form>
-
+      {/* AI Skill Analysis */}
       <div className="bg-white p-6 rounded-xl shadow space-y-4">
         <h2 className="text-xl font-semibold mb-2">AI Skill Analysis</h2>
         <div>
@@ -148,7 +152,6 @@ export default function ProfilePage() {
           >Analyze Video</button>
         </div>
       </div>
-
       <button
         className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-xl font-bold text-lg mt-8"
         onClick={() => navigate('/pricing')}

@@ -22,6 +22,7 @@
     "@tailwindcss/vite": "^4.1.10",
     "algosdk": "^3.3.1",
     "framer-motion": "^12.18.1",
+    "lingo.dev": "^0.99.8",
     "lucide-react": "^0.519.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

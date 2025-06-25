@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, MessageSquare, X, Send, Volume2, VolumeX } from 'lucide-react';
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import lingoDotDev from '../utils/lingoDotDev';
+import { StreakService } from '../services/streakService';
+import { showNotification } from '../utils/notification';
 
 const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
 const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
@@ -28,6 +31,7 @@ export default function VoiceHelp() {
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [userLocale, setUserLocale] = useState('en'); // Default to English
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -69,6 +73,15 @@ export default function VoiceHelp() {
     const messageText = text || inputText.trim();
     if (!messageText) return;
 
+    // Detect language of user message
+    let detectedLocale = 'en';
+    try {
+      detectedLocale = await lingoDotDev.recognizeLocale(messageText);
+      setUserLocale(detectedLocale);
+    } catch (err) {
+      detectedLocale = 'en';
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: messageText,
@@ -80,13 +93,24 @@ export default function VoiceHelp() {
     setInputText('');
     setIsLoading(true);
 
+    // --- Streak and notification integration ---
+    try {
+      const streak = await StreakService.updateDailyPracticeStreak();
+      if (streak && streak.current_streak) {
+        showNotification('🔥 Daily Streak!', { body: `You are on a ${streak.current_streak}-day practice streak!` });
+      }
+    } catch (err) {
+      // Ignore streak errors
+    }
+    // --- End streak integration ---
+
     try {
       // Use the correct API payload for simulateConversation
       const result = await client.conversationalAi.agents.simulateConversation(agentId, {
         simulationSpecification: {
           simulatedUserConfig: {
             firstMessage: messageText,
-            language: "en"
+            language: detectedLocale || 'en'
           }
         }
       });
@@ -154,13 +178,26 @@ export default function VoiceHelp() {
   };
 
   const playAudioResponse = async (text: string) => {
-    try {
-      // Try ElevenLabs TTS first
+    if (!text || typeof text !== 'string' || !text.trim()) return;
+    let ttsText = text;
+    // Optionally translate agent response if userLocale is not 'en'
+    if (userLocale !== 'en') {
       try {
-        // Use the correct arguments for ElevenLabs SDK: (voice, text, options)
+        ttsText = await lingoDotDev.localizeText(text, {
+          sourceLocale: 'en',
+          targetLocale: userLocale
+        });
+      } catch (err) {
+        console.warn('Translation failed, using original text.', err);
+        ttsText = text;
+      }
+    }
+    try {
+      // Always send a valid TextToSpeechRequest object to ElevenLabs
+      if (ttsText && typeof ttsText === 'string' && ttsText.trim()) {
         const stream = await client.textToSpeech.convert(
           'Rachel',
-          text as any
+          { text: ttsText }
         );
         if (stream && stream instanceof ReadableStream) {
           const response = new Response(stream);
@@ -171,19 +208,17 @@ export default function VoiceHelp() {
           await audioObj.play();
           return;
         }
-      } catch (err) {
-        console.warn('ElevenLabs TTS failed, falling back to browser TTS.', err);
       }
-      // Fallback: browser speech synthesis
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 0.8;
-        speechSynthesis.speak(utterance);
-      }
-    } catch (error) {
-      console.error('Error playing audio:', error);
+    } catch (err) {
+      console.warn('ElevenLabs TTS failed, falling back to browser TTS.', err);
+    }
+    // Fallback: browser speech synthesis
+    if ('speechSynthesis' in window && ttsText && ttsText.trim()) {
+      const utterance = new SpeechSynthesisUtterance(ttsText);
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 0.8;
+      speechSynthesis.speak(utterance);
     }
   };
 

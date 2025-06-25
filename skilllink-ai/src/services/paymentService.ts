@@ -69,15 +69,18 @@ export class PaymentService {
   // Create a payment intent for one-time payments
   static async createPaymentIntent(paymentData: PaymentData): Promise<any> {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user, error: userError } = await supabase.auth.getUser();
       if (!user.user) throw new Error('User not authenticated');
-
+      // Get session for access_token
+      const sessionResult = await supabase.auth.getSession();
+      const accessToken = sessionResult.data.session?.access_token;
+      if (!accessToken) throw new Error('No access token found');
       // Call your backend API to create Stripe payment intent
       const response = await fetch('/api/create-payment-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.user.access_token}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           amount: Math.round(paymentData.amount * 100), // Convert to cents
@@ -115,7 +118,7 @@ export class PaymentService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.user.access_token}`
+          'Authorization': `Bearer ${user.session?.access_token}`
         },
         body: JSON.stringify({
           price_id: plan.stripePriceId,
@@ -152,7 +155,7 @@ export class PaymentService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.user.access_token}`
+          'Authorization': `Bearer ${user.session?.access_token}`
         }
       });
 
@@ -180,7 +183,7 @@ export class PaymentService {
       const response = await fetch('/api/get-subscription', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${user.user.access_token}`
+          'Authorization': `Bearer ${user.session?.access_token}`
         }
       });
 

@@ -326,19 +326,19 @@ export default function SmartMatchmaking() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-2 sm:px-4 md:px-8 max-w-6xl mx-auto w-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center space-x-2">
             <Brain className="w-6 h-6 text-indigo-600" />
             <span>Smart Matchmaking</span>
           </h2>
-          <p className="text-gray-600">AI-powered skill partner recommendations</p>
+          <p className="text-gray-600 text-sm sm:text-base">AI-powered skill partner recommendations</p>
         </div>
         <button
           onClick={() => setShowPreferences(!showPreferences)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 w-full sm:w-auto justify-center"
         >
           <Filter className="w-4 h-4" />
           <span>Preferences</span>
@@ -351,7 +351,7 @@ export default function SmartMatchmaking() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          className="bg-white rounded-xl p-6 shadow-sm border border-gray-100"
+          className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100"
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Matching Preferences</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -399,7 +399,7 @@ export default function SmartMatchmaking() {
       )}
 
       {/* Match Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Matches', value: matches.length.toString(), icon: Users, color: 'bg-blue-500' },
           { label: 'High Compatibility', value: matches.filter(m => m.matchScore >= 80).length.toString(), icon: Star, color: 'bg-green-500' },
@@ -428,7 +428,7 @@ export default function SmartMatchmaking() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+            className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
           >
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Profile Section */}
@@ -525,7 +525,7 @@ export default function SmartMatchmaking() {
               </div>
               
               {/* Actions Section */}
-              <div className="flex lg:flex-col gap-3 lg:w-48">
+              <div className="flex flex-col gap-3 w-full sm:w-auto lg:w-48 mt-4 lg:mt-0">
                 <button 
                   onClick={() => handleConnect(match.id)}
                   className="flex-1 lg:w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center space-x-2"
@@ -566,11 +566,11 @@ export default function SmartMatchmaking() {
 
       {/* Profile Modal */}
       {selectedMatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-xl p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900">Profile Details</h3>
