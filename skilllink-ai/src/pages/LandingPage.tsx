@@ -18,10 +18,13 @@ import {
   CheckCircle,
   Sparkles
 } from 'lucide-react';
+import BoltBadge from '../components/BoltBadge';
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
+      {/* Animated Bolt Badge floating above hero */}
+      <BoltBadge variant="float" />
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -348,7 +351,8 @@ export default function LandingPage() {
           </div>
           
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 SkillLink AI. All rights reserved. Built with ❤️ for learners everywhere.</p>
+            <BoltBadge variant="footer" className="mb-2" />
+            <p>&copy; 2025 SkillLink AI. All rights reserved. Built with ⚡Bolt.new for the Worlds Largest Hackathon.</p>
           </div>
         </div>
       </footer>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mic, 
   MicOff, 
@@ -18,7 +18,8 @@ import {
   Lightbulb,
   Play,
   Square,
-  RotateCcw
+  RotateCcw,
+  Pause
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
@@ -26,6 +27,7 @@ import { useConversation } from "@elevenlabs/react";
 import { TavusConversationAPI } from '../services/aiServices';
 import { StreakService } from '../services/streakService';
 import { showNotification } from '../utils/notification';
+import BoltBadge from './BoltBadge';
 
 const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
 const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
@@ -102,6 +104,15 @@ export default function ConversationCoach() {
   // 4. Real-time Language Correction
   const [languageCorrections, setLanguageCorrections] = useState<string[]>([]);
 
+  // Voice session states
+  const [isVoiceSession, setIsVoiceSession] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [aiVoiceResponse, setAiVoiceResponse] = useState('');
+  const [showVoiceAnim, setShowVoiceAnim] = useState(false);
+  const [voiceInput, setVoiceInput] = useState('');
+  const recognitionRef = useRef<any>(null);
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isSessionActive) {
@@ -115,6 +126,28 @@ export default function ConversationCoach() {
 
   useEffect(() => {
     fetchTavusConversations();
+  }, []);
+
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+      recognitionRef.current.onresult = (event: any) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            setVoiceTranscript((prev) => prev + ' ' + event.results[i][0].transcript);
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+      };
+      recognitionRef.current.onstart = () => setShowVoiceAnim(true);
+      recognitionRef.current.onend = () => setShowVoiceAnim(false);
+    }
   }, []);
 
   const updateMetrics = async () => {
@@ -393,8 +426,168 @@ export default function ConversationCoach() {
     // --- End streak integration ---
   };
 
+  // Rename immersive overlay handler
+  const startImmersiveVoiceSession = () => {
+    setIsVoiceSession(true);
+    setVoiceTranscript('');
+    setAiVoiceResponse('');
+    setVoiceInput('');
+  };
+
+  const stopVoiceSession = () => {
+    setIsVoiceSession(false);
+    setIsListening(false);
+    setShowVoiceAnim(false);
+    if (recognitionRef.current) recognitionRef.current.stop();
+  };
+
+  const startListening = () => {
+    setIsListening(true);
+    if (recognitionRef.current) recognitionRef.current.start();
+  };
+
+  const stopListening = () => {
+    setIsListening(false);
+    if (recognitionRef.current) recognitionRef.current.stop();
+  };
+
+  // Simulate AI response (replace with real AI integration)
+  useEffect(() => {
+    if ((voiceTranscript || voiceInput) && !isListening) {
+      setTimeout(() => {
+        setAiVoiceResponse('🤖 AI: ' + (voiceTranscript || voiceInput).split(' ').reverse().join(' '));
+      }, 1200);
+    }
+  }, [voiceTranscript, voiceInput, isListening]);
+
+  // Voice animation (Google Assistant style, responsive)
+  const VoiceAnim = () => (
+    <div className="flex items-center justify-center mt-8 mb-4">
+      <div className="relative flex items-center justify-center">
+        {/* Animated ripples */}
+        {[1, 2, 3].map((i) => (
+          <motion.div
+            key={i}
+            className={`absolute rounded-full border-2 border-indigo-400/40`}
+            style={{
+              width: `${6 + i * 4}rem`,
+              height: `${6 + i * 4}rem`,
+              left: `50%`,
+              top: `50%`,
+              transform: `translate(-50%, -50%)`,
+              zIndex: 1,
+            }}
+            animate={{
+              scale: [1, 1.15, 1],
+              opacity: [0.5, 0.2, 0],
+            }}
+            transition={{
+              duration: 1.5 + i * 0.2,
+              repeat: Infinity,
+              delay: i * 0.3,
+              ease: 'easeInOut',
+            }}
+          />
+        ))}
+        {/* Main circle */}
+        <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-indigo-700 flex items-center justify-center shadow-2xl relative z-10">
+          <Mic className="w-12 h-12 sm:w-16 sm:h-16 text-white drop-shadow-lg" />
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- Main Component Render ---
   return (
-    <div className="space-y-6">
+    <div className="relative">
+      {/* Random BoltBadge in top-left corner */}
+      <BoltBadge variant="corner" />
+      {/* Voice Session Overlay */}
+      <AnimatePresence>
+        {isVoiceSession && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-700 flex flex-col items-center justify-center"
+          >
+            {/* Fun floating BoltBadge inside overlay */}
+            <BoltBadge variant="pulse" className="top-10 left-1/2 absolute" />
+            <div className="absolute top-4 right-4">
+              <button
+                onClick={stopVoiceSession}
+                className="bg-white/20 hover:bg-white/40 text-white rounded-full p-2"
+                title="End Session"
+              >
+                <Square className="w-8 h-8" />
+              </button>
+            </div>
+            <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto px-2 sm:px-0">
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold text-white text-center">Conversation Coach</h2>
+                <p className="text-indigo-100 text-center mt-2">Voice-to-voice session. Speak or type and get instant AI feedback!</p>
+              </div>
+              {/* Voice Animation */}
+              {showVoiceAnim && <VoiceAnim />}
+              {/* Controls */}
+              <div className="flex items-center gap-6 mt-4">
+                {!isListening ? (
+                  <button
+                    onClick={startListening}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-6 shadow-lg transition"
+                  >
+                    <Mic className="w-8 h-8" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopListening}
+                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-full p-6 shadow-lg transition"
+                  >
+                    <Pause className="w-8 h-8" />
+                  </button>
+                )}
+              </div>
+              {/* Transcript */}
+              <div className="mt-8 w-full bg-white/10 rounded-xl p-4 text-white min-h-[60px]">
+                <div className="font-semibold mb-1">You:</div>
+                <div className="whitespace-pre-line">{voiceTranscript || <span className="text-indigo-200">Say something to start...</span>}</div>
+                <input
+                  type="text"
+                  className="mt-4 w-full rounded-lg px-3 py-2 bg-white/20 text-white placeholder-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="Type your message if you prefer..."
+                  value={voiceInput}
+                  onChange={e => setVoiceInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      setVoiceTranscript(voiceInput);
+                      setVoiceInput('');
+                    }
+                  }}
+                />
+              </div>
+              {/* AI Response */}
+              {aiVoiceResponse && (
+                <div className="mt-4 w-full bg-white/10 rounded-xl p-4 text-white min-h-[60px]">
+                  <div className="font-semibold mb-1">AI:</div>
+                  <div className="whitespace-pre-line">{aiVoiceResponse}</div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Main UI */}
+      <div className="flex flex-col items-center justify-center py-8 px-2 sm:px-0">
+        <button
+          onClick={startImmersiveVoiceSession}
+          className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-8 py-4 rounded-2xl font-bold text-xl shadow-lg hover:scale-105 transition"
+        >
+          Start Voice-to-Voice Session
+        </button>
+        <p className="mt-4 text-gray-600 text-center max-w-md">
+          Try our immersive voice-to-voice Conversation Coach! Get real-time feedback and practice your speaking skills with cool voice animations inspired by Google Assistant and other voice apps.
+        </p>
+      </div>
       {/* Info Banner */}
       <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-6 text-white shadow mb-2">
         <h2 className="text-2xl font-bold mb-1">Welcome to Your AI Coaching Session</h2>
@@ -469,8 +662,8 @@ export default function ConversationCoach() {
           </button>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Main Video Area */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-gray-900 rounded-xl aspect-video relative overflow-hidden">
@@ -481,7 +674,6 @@ export default function ConversationCoach() {
               playsInline
               className="w-full h-full object-cover"
             />
-            
             {!stream && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
@@ -491,7 +683,6 @@ export default function ConversationCoach() {
                 </div>
               </div>
             )}
-            
             {/* Session Status Indicator */}
             {isSessionActive && (
               <div className="absolute top-4 left-4 flex items-center space-x-2 bg-red-500 px-3 py-1 rounded-full">
@@ -499,7 +690,6 @@ export default function ConversationCoach() {
                 <span className="text-white text-sm font-medium">LIVE</span>
               </div>
             )}
-
             {/* Analysis Overlay */}
             {isAnalyzing && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -511,7 +701,6 @@ export default function ConversationCoach() {
               </div>
             )}
           </div>
-
           {/* Real-time Metrics */}
           {isSessionActive && (
             <motion.div
@@ -545,7 +734,6 @@ export default function ConversationCoach() {
             </motion.div>
           )}
         </div>
-
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Real-time Feedback */}
@@ -707,7 +895,7 @@ export default function ConversationCoach() {
 
       {/* Tavus AI Video Session Controls */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mt-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <Camera className="w-6 h-6 text-blue-600" />
@@ -716,7 +904,6 @@ export default function ConversationCoach() {
               <h2 className="text-lg font-bold text-gray-900">AI Video Session (Tavus)</h2>
               <p className="text-gray-600">
                 Practice with a conversational AI video coach. After your session, receive feedback on your body language, engagement, and speaking style. <span className="font-semibold">This feature uses AI to analyze your video and provide actionable tips for improvement.</span>
-                {/** If no real analysis is available, clarify it's experimental. */}
                 <br />
                 <span className="text-xs text-blue-500">Note: Video analysis is experimental. Feedback will appear here if available after your session.</span>
               </p>
@@ -748,14 +935,8 @@ export default function ConversationCoach() {
         {/* --- Video Analysis Feedback Section --- */}
         <div className="mb-4">
           <h4 className="font-semibold mb-1">AI Video Analysis Feedback</h4>
-          {/* Replace the below with real analysis results if available */}
           <div className="text-gray-600 text-sm bg-blue-50 border border-blue-100 rounded-lg p-3">
-            {/* Example: If you have analysis results, display them here. */}
-            {/* {videoAnalysisResult ? (
-              <div>{videoAnalysisResult.summary}</div>
-            ) : ( */}
-              <span>No analysis results yet. Complete a session to see feedback on your body language, engagement, and speaking style.</span>
-            {/* )} */}
+            <span>No analysis results yet. Complete a session to see feedback on your body language, engagement, and speaking style.</span>
           </div>
         </div>
         {activeTavusConversation && (activeTavusConversation.join_url || activeTavusConversation.url) && (

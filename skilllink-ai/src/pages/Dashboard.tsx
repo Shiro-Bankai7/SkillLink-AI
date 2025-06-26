@@ -43,6 +43,7 @@ import VoiceHelp from '../components/VoiceHelp';
 import TavusConversationSession from '../components/TavusConversationSession';
 import UserProfile from '../components/UserProfile';
 import { showNotification } from '../utils/notification';
+import BoltBadge from '../components/BoltBadge';
 
 interface UserProfile {
   id: string;
@@ -831,6 +832,8 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+    {/* Fun random BoltBadge floating in dashboard header */}
+    <BoltBadge variant="float" className="top-2 left-1/3 absolute" />
     {/* Mobile Bottom Nav */}
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 flex md:hidden justify-around py-2 shadow-lg">
       {[

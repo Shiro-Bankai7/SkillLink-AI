@@ -20,6 +20,7 @@ import {
   Cake,
   Timer // Added Timer for clock icon
 } from 'lucide-react';
+import BoltBadge from './BoltBadge';
 
 interface SillyCoach {
   id: string;
@@ -285,6 +286,9 @@ export default function SillySkillMode() {
         </div>
       </div>
 
+      {/* Random BoltBadge floating in SillySkillMode header */}
+      <BoltBadge variant="float" className="top-0 right-1/4 absolute" />
+
       {!selectedCoach ? (
         /* Coach Selection */
         <div className="space-y-6">
@@ -320,6 +324,9 @@ export default function SillySkillMode() {
               </div>
             </div>
           </motion.div>
+
+          {/* Animated BoltBadge pulsing in Silly Points info */}
+          <BoltBadge variant="pulse" className="mb-4" />
 
           {/* Coach Grid */}
           <div>
