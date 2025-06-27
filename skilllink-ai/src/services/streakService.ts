@@ -17,9 +17,9 @@ export class StreakService {
         .from('user_streaks')
         .select('*')
         .eq('user_id', user.user.id)
-        .single();
-      if (error) throw error;
-      return streaks as UserStreak;
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      return streaks as UserStreak || null;
     } catch (error) {
       console.error('Error fetching user streak:', error);
       return null;
@@ -35,8 +35,8 @@ export class StreakService {
         .from('user_streaks')
         .select('*')
         .eq('user_id', user.user.id)
-        .single();
-      if (fetchError) throw fetchError;
+        .maybeSingle();
+      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
 
       let newCurrentStreak = 0;
       if (existingStreak) {
@@ -59,9 +59,9 @@ export class StreakService {
           .update({ current_streak: newCurrentStreak, last_practice_date: today })
           .eq('id', existingStreak.id)
           .select('*')
-          .single();
-        if (updateError) throw updateError;
-        return updatedStreak;
+          .maybeSingle();
+        if (updateError && updateError.code !== 'PGRST116') throw updateError;
+        return updatedStreak || null;
       } else {
         // Create new streak
         showNotification('🔥 Streak Started!', { body: 'You started a new daily practice streak!' });
@@ -69,9 +69,9 @@ export class StreakService {
           .from('user_streaks')
           .insert({ user_id: user.user.id, current_streak: 1, last_practice_date: today })
           .select('*')
-          .single();
-        if (insertError) throw insertError;
-        return newStreak;
+          .maybeSingle();
+        if (insertError && insertError.code !== 'PGRST116') throw insertError;
+        return newStreak || null;
       }
     } catch (error) {
       console.error('Error updating daily practice streak:', error);
@@ -96,8 +96,8 @@ export class StreakService {
         .from('user_streaks')
         .select('*')
         .eq('user_id', user.user.id)
-        .single();
-      if (streakFetchError) throw streakFetchError;
+        .maybeSingle();
+      if (streakFetchError && streakFetchError.code !== 'PGRST116') throw streakFetchError;
 
       let newCurrentStreak = 0;
       if (existingStreak) {
@@ -120,9 +120,9 @@ export class StreakService {
           .update({ current_streak: newCurrentStreak, last_practice_date: new Date().toISOString().split('T')[0] })
           .eq('id', existingStreak.id)
           .select('*')
-          .single();
-        if (updateError) throw updateError;
-        return updatedStreak;
+          .maybeSingle();
+        if (updateError && updateError.code !== 'PGRST116') throw updateError;
+        return updatedStreak || null;
       } else {
         // Create new streak
         showNotification('⭐ Streak Started!', { body: 'You started a new weekly session streak!' });
@@ -130,9 +130,9 @@ export class StreakService {
           .from('user_streaks')
           .insert({ user_id: user.user.id, current_streak: 1, last_practice_date: new Date().toISOString().split('T')[0] })
           .select('*')
-          .single();
-        if (insertError) throw insertError;
-        return newStreak;
+          .maybeSingle();
+        if (insertError && insertError.code !== 'PGRST116') throw insertError;
+        return newStreak || null;
       }
     } catch (error) {
       console.error('Error updating weekly sessions streak:', error);
@@ -148,8 +148,8 @@ export class StreakService {
         .from('user_streaks')
         .select('current_streak')
         .eq('user_id', user.user.id)
-        .single();
-      if (error) throw error;
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
       return {
         dailyStreak: streak?.current_streak || 0,
         weeklyStreak: streak?.current_streak || 0

@@ -63,18 +63,19 @@ export class TavusService {
         body: JSON.stringify(request),
       });
 
+      const parsed = await response.json();
+      console.log('Parsed Tavus Response:', parsed);
+
       if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Tavus API error: ${response.status} ${response.statusText} - ${JSON.stringify(parsed)}`);
       }
 
-      const conversation = await response.json();
-      
       // Save conversation to Supabase
       const { data: user } = await supabase.auth.getUser();
       if (user.user) {
         await supabase.from('tavus_conversations').insert({
           user_id: user.user.id,
-          conversation_id: conversation.conversation_id,
+          conversation_id: parsed.conversation_id,
           conversation_name: request.conversation_name,
           conversational_context: request.conversational_context,
           replica_id: request.replica_id,
@@ -84,7 +85,7 @@ export class TavusService {
         });
       }
 
-      return conversation;
+      return parsed;
     } catch (error) {
       console.error('Error creating Tavus conversation:', error);
       throw error;

@@ -27,7 +27,9 @@ import {
   Plus,
   BarChart3,
   User,
-  LogOut
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 
@@ -43,6 +45,7 @@ import VoiceHelp from '../components/VoiceHelp';
 import TavusConversationSession from '../components/TavusConversationSession';
 import UserProfile from '../components/UserProfile';
 import { showNotification } from '../utils/notification';
+import { StreakService } from '../services/streakService';
 import BoltBadge from '../components/BoltBadge';
 
 interface UserProfile {
@@ -82,6 +85,8 @@ export default function Dashboard() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [showProfile, setShowProfile] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [streakData, setStreakData] = useState<{ dailyStreak: number; weeklyStreak: number } | null>(null);
   const [achievements] = useState<Achievement[]>([
     {
       id: '1',
@@ -115,11 +120,11 @@ export default function Dashboard() {
   const onboardingSteps = [
     {
       title: 'Welcome to SkillLink AI!',
-      description: 'SkillLink AI is your gamified platform for real-time skill coaching, peer barter, and AI-powered feedback. Let’s take a quick tour!'
+      description: 'SkillLink AI is your gamified platform for real-time skill coaching, peer barter, and AI-powered feedback. Let\'s take a quick tour!'
     },
     {
       title: 'AI Coaching Sessions',
-      description: 'Practice with our AI coach for instant feedback on your speaking, body language, and more. Try the “AI Coaching” tab to get started.'
+      description: 'Practice with our AI coach for instant feedback on your speaking, body language, and more. Try the "AI Coaching" tab to get started.'
     },
     {
       title: 'Skill Exchange',
@@ -134,13 +139,24 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState([
     { id: 1, title: 'Welcome to SkillLink!', body: 'Start your first AI coaching session.' },
     { id: 2, title: 'Streak Unlocked!', body: 'You are on a 3-day practice streak.' },
-    // Add more or fetch from backend
   ]);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // Add state for real progress and achievements
+  const [userProgress, setUserProgress] = useState<any>(null);
+  const [userAchievements, setUserAchievements] = useState<Achievement[]>([]);
 
   useEffect(() => {
     fetchProfile();
     fetchSessions();
+    fetchStreakData();
+    fetchUserProgress();
+    fetchUserAchievements();
+    
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   }, [user]);
 
   useEffect(() => {
@@ -175,6 +191,116 @@ export default function Dashboard() {
       .or(`user_id.eq.${user.id},requester_id.eq.${user.id},provider_id.eq.${user.id},partner_id.eq.${user.id}`);
     if (!error && data) {
       setSessions(data);
+    }
+  };
+
+  const fetchStreakData = async () => {
+    try {
+      const data = await StreakService.getStreakStats();
+      setStreakData(data);
+    } catch (error) {
+      console.error('Error fetching streak data:', error);
+    }
+  };
+
+  // Fetch real progress data (example: from Supabase or your backend)
+  const fetchUserProgress = async () => {
+    if (!user) return;
+    // Example: fetch from a 'progress' table or calculate from sessions
+    // Replace with your actual logic
+    const { data, error } = await supabase
+      .from('progress')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+    if (!error && data) {
+      setUserProgress(data);
+    } else {
+      // Fallback: calculate from sessions
+      const skills = [
+        { skill: 'Public Speaking', level: 0, change: '+0%' },
+        { skill: 'UI/UX Design', level: 0, change: '+0%' },
+        { skill: 'Programming', level: 0, change: '+0%' },
+        { skill: 'Language Learning', level: 0, change: '+0%' }
+      ];
+      // Example: count completed sessions by skill
+      sessions.forEach(s => {
+        const skill = skills.find(sk => sk.skill.toLowerCase() === s.skill?.toLowerCase());
+        if (skill && s.status === 'completed') {
+          skill.level += 10; // Example increment
+          skill.change = '+10%';
+        }
+      });
+      setUserProgress({ skills });
+    }
+  };
+
+  // Fetch real achievements (example: from Supabase or calculate)
+  const fetchUserAchievements = async () => {
+    if (!user) return;
+    // Example: fetch from an 'achievements' table
+    const { data, error } = await supabase
+      .from('achievements')
+      .select('*')
+      .eq('user_id', user.id);
+    if (!error && data) {
+      setUserAchievements(data);
+    } else {
+      // Fallback: calculate based on app criteria
+      const achievements: Achievement[] = [];
+      // First Steps: completed at least 1 AI coaching session
+      if (sessions.some(s => s.type === 'ai_coaching' && s.status === 'completed')) {
+        achievements.push({
+          id: '1',
+          title: 'First Steps',
+          description: 'Complete your first AI coaching session',
+          icon: '🎯',
+          earned: true,
+          progress: 100
+        });
+      }
+      // Skill Sharer: taught 5 different skills
+      const taughtSkills = new Set(sessions.filter(s => s.type === 'skill_exchange' && s.status === 'completed').map(s => s.skill));
+      achievements.push({
+        id: '2',
+        title: 'Skill Sharer',
+        description: 'Teach 5 different skills',
+        icon: '🎓',
+        earned: taughtSkills.size >= 5,
+        progress: Math.min(100, (taughtSkills.size / 5) * 100)
+      });
+      // Community Builder: helped 10 learners
+      const learnersHelped = sessions.filter(s => s.type === 'skill_exchange' && s.status === 'completed').length;
+      achievements.push({
+        id: '3',
+        title: 'Community Builder',
+        description: 'Help 10 learners improve their skills',
+        icon: '🤝',
+        earned: learnersHelped >= 10,
+        progress: Math.min(100, (learnersHelped / 10) * 100)
+      });
+      // Streaks
+      if (streakData?.dailyStreak && streakData.dailyStreak >= 7) {
+        achievements.push({
+          id: '4',
+          title: 'Week Warrior',
+          description: 'Practiced for 7 days in a row',
+          icon: '🔥',
+          earned: true,
+          progress: 100
+        });
+      }
+      if (streakData?.dailyStreak && streakData.dailyStreak >= 30) {
+        achievements.push({
+          id: '5',
+          title: 'Monthly Master',
+          description: 'Practiced for 30 days in a row',
+          icon: '🏆',
+          earned: true,
+          progress: 100
+        });
+      }
+      setUserAchievements(achievements);
     }
   };
 
@@ -302,7 +428,7 @@ export default function Dashboard() {
                   <Zap className="w-5 h-5 text-white" />
                 </div>
                 <h1 className="text-xl font-bold text-gray-900">SkillLink AI</h1>
-              </div>
+              </div
               
               {/* Desktop Nav */}
               <div className="hidden md:flex items-center space-x-1">
@@ -323,15 +449,17 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center space-x-4">
-              <div className="relative">
+              {/* Search - Hidden on mobile */}
+              <div className="hidden sm:block relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search skills, sessions..."
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-64"
                 />
               </div>
               
+              {/* Notifications */}
               <button
                 className="relative p-2 text-gray-400 hover:text-gray-500"
                 onClick={() => setShowNotifications((prev) => !prev)}
@@ -354,12 +482,13 @@ export default function Dashboard() {
                             <div className="text-gray-600 text-sm">{notif.body}</div>
                           </div>
                         ))
-                      )}
+                      }
                     </div>
                   </div>
                 )}
               </button>
               
+              {/* Profile and Menu */}
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setShowProfile(true)}
@@ -367,44 +496,90 @@ export default function Dashboard() {
                 >
                   <User className="w-4 h-4 text-white" />
                 </button>
+                
+                {/* Mobile menu button */}
+                <button
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  className="md:hidden p-2 text-gray-500 hover:text-gray-700"
+                >
+                  {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+                
+                {/* Desktop logout */}
                 <button
                   onClick={logout}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="hidden md:block text-gray-500 hover:text-gray-700"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
             </div>
+            
+            {/* Mobile Menu */}
+            {isMobileMenuOpen && (
+              <div className="md:hidden border-t border-gray-200 py-4">
+                <div className="flex flex-col space-y-2">
+                  {['overview', 'sessions', 'practice', 'community', 'progress'].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => {
+                        setActiveTab(tab);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`px-3 py-2 rounded-md text-sm font-medium capitalize transition-colors text-left ${
+                        activeTab === tab
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                  <button
+                    onClick={logout}
+                    className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md text-left"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {activeTab === 'overview' && (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {/* Welcome Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-8 text-white"
+              className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-6 sm:p-8 text-white"
             >
-              <h2 className="text-3xl font-bold mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold mb-2">
                 Welcome back, {user?.email?.split('@')[0]}! 👋
               </h2>
-              <p className="text-indigo-100 mb-6">
-                Ready to level up your skills today? You have 2 upcoming sessions and 3 new skill matches.
+              <p className="text-indigo-100 mb-4 sm:mb-6">
+                Ready to level up your skills today? You have {sessions.filter(s => s.status === 'upcoming').length} upcoming sessions.
               </p>
-              <div className="flex flex-wrap gap-4">
+              {streakData && (
+                <div className="mb-4 sm:mb-6">
+                  <p className="text-indigo-100 text-sm">
+                    🔥 {streakData.dailyStreak} day streak • ⭐ {streakData.weeklyStreak} week streak
+                  </p>
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-4">
                 <button 
                   onClick={() => setActiveTab('practice')}
-                  className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center space-x-2"
+                  className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center justify-center space-x-2"
                 >
                   <Video className="w-4 h-4" />
                   <span>Start AI Coaching</span>
                 </button>
                 <button 
                   onClick={() => setActiveTab('community')}
-                  className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center space-x-2"
+                  className="bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-colors flex items-center justify-center space-x-2"
                 >
                   <Users className="w-4 h-4" />
                   <span>Find Skill Partners</span>
@@ -416,27 +591,27 @@ export default function Dashboard() {
             <VoiceHelp />
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {[
-                { label: 'Sessions Completed', value: '24', icon: Video, color: 'bg-blue-500' },
+                { label: 'Sessions Completed', value: sessions.filter(s => s.status === 'completed').length.toString(), icon: Video, color: 'bg-blue-500' },
                 { label: 'Skills Learned', value: '8', icon: BookOpen, color: 'bg-green-500' },
-                { label: 'Hours Practiced', value: '47', icon: Clock, color: 'bg-purple-500' },
-                { label: 'Community Rank', value: '#156', icon: TrendingUp, color: 'bg-orange-500' }
+                { label: 'Hours Practiced', value: Math.floor(sessions.reduce((acc, s) => acc + s.duration, 0) / 60).toString(), icon: Clock, color: 'bg-purple-500' },
+                { label: 'Daily Streak', value: streakData?.dailyStreak?.toString() || '0', icon: TrendingUp, color: 'bg-orange-500' }
               ].map((stat, index) => (
                 <motion.div
                   key={stat.label}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="bg-white rounded-xl p-6 shadow-sm border border-gray-100"
+                  className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                      <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                      <p className="text-xs sm:text-sm font-medium text-gray-600">{stat.label}</p>
+                      <p className="text-xl sm:text-2xl font-bold text-gray-900">{stat.value}</p>
                     </div>
-                    <div className={`${stat.color} p-3 rounded-lg`}>
-                      <stat.icon className="w-6 h-6 text-white" />
+                    <div className={`${stat.color} p-2 sm:p-3 rounded-lg`}>
+                      <stat.icon className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                     </div>
                   </div>
                 </motion.div>
@@ -444,14 +619,14 @@ export default function Dashboard() {
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
               {/* Upcoming Sessions */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white rounded-xl p-6 shadow-sm border border-gray-100"
+                className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100"
               >
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">Upcoming Sessions</h3>
                   <button 
                     onClick={() => setActiveTab('sessions')}
@@ -462,7 +637,7 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-4">
                   {sessions.filter(s => s.status === 'upcoming').slice(0, 3).map((session) => (
-                    <div key={session.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                    <div key={session.id} className="flex items-center space-x-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
                       <div className="flex-shrink-0">
                         {getTypeIcon(session.type)}
                       </div>
@@ -492,9 +667,9 @@ export default function Dashboard() {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white rounded-xl p-6 shadow-sm border border-gray-100"
+                className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100"
               >
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">Achievements</h3>
                   <button 
                     onClick={() => setActiveTab('progress')}
@@ -504,7 +679,7 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <div className="space-y-4">
-                  {achievements.map((achievement) => (
+                  {userAchievements.map((achievement) => (
                     <div key={achievement.id} className="flex items-center space-x-4">
                       <div className="text-2xl">{achievement.icon}</div>
                       <div className="flex-1">
@@ -531,14 +706,14 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'practice' && (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {/* Conversation Coach Studio */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-xl p-8 shadow-sm border border-gray-100"
+              className="bg-white rounded-xl p-4 sm:p-8 shadow-sm border border-gray-100"
             >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Conversation Coach</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Conversation Coach</h2>
               <ConversationCoach />
             </motion.div>
 
@@ -546,9 +721,9 @@ export default function Dashboard() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-xl p-8 shadow-sm border border-gray-100"
+              className="bg-white rounded-xl p-4 sm:p-8 shadow-sm border border-gray-100"
             >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">AI Conversation Sessions</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">AI Conversation Sessions</h2>
               <div className="mb-6">
                 <button
                   onClick={() => setShowCreateTavus(true)}
@@ -645,9 +820,9 @@ export default function Dashboard() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-xl p-8 shadow-sm border border-gray-100"
+              className="bg-white rounded-xl p-4 sm:p-8 shadow-sm border border-gray-100"
             >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Video Analysis</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Video Analysis</h2>
               <VideoAnalysis />
             </motion.div>
           </div>
@@ -655,7 +830,7 @@ export default function Dashboard() {
 
         {activeTab === 'sessions' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <h2 className="text-2xl font-bold text-gray-900">My Sessions</h2>
               <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
                 <Plus className="w-4 h-4" />
@@ -663,7 +838,7 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <div className="flex items-center space-x-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
               <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                 <Filter className="w-4 h-4" />
                 <span>Filter</span>
@@ -682,9 +857,9 @@ export default function Dashboard() {
                   key={session.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-xl p-6 shadow-sm border border-gray-100"
+                  className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100"
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex items-start space-x-4">
                       <div className="p-3 bg-indigo-100 rounded-lg">
                         {getTypeIcon(session.type)}
@@ -692,7 +867,7 @@ export default function Dashboard() {
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">{session.title}</h3>
                         <p className="text-gray-600 capitalize">{session.type.replace('_', ' ')}</p>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-500">
                           <span>{new Date(session.date).toLocaleDateString()}</span>
                           <span>{session.duration} minutes</span>
                           {session.participants && <span>{session.participants} participants</span>}
@@ -720,21 +895,21 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold text-gray-900">Community</h2>
             
             {/* Skill Exchange Marketplace */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Skill Exchange Marketplace</h3>
               <SkillExchange />
             </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Smart Matchmaking</h3>
               <SmartMatchMaking />
             </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Silly Skill Mode</h3>
               <SillySkillMode />
             </div>
 
             {/* Community Leaderboard */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Community Leaderboard</h3>
               <div className="space-y-3">
                 {[
@@ -764,15 +939,10 @@ export default function Dashboard() {
             
             {/* Progress Overview */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Skill Development</h3>
                 <div className="space-y-4">
-                  {[
-                    { skill: 'Public Speaking', level: 85, change: '+12%' },
-                    { skill: 'UI/UX Design', level: 72, change: '+8%' },
-                    { skill: 'Programming', level: 68, change: '+15%' },
-                    { skill: 'Language Learning', level: 45, change: '+5%' }
-                  ].map((item, index) => (
+                  {userProgress?.skills?.map((item: any, index: number) => (
                     <div key={index} className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-gray-900">{item.skill}</span>
@@ -792,7 +962,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Activity</h3>
                 <div className="h-64 flex items-end justify-between space-x-2">
                   {[40, 65, 45, 80, 55, 90, 70].map((height, index) => (
@@ -811,7 +981,7 @@ export default function Dashboard() {
             </div>
 
             {/* Detailed Analytics */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Insights</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center">
@@ -823,8 +993,8 @@ export default function Dashboard() {
                   <div className="text-sm text-gray-600">Average Feedback Score</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-purple-600 mb-2">23</div>
-                  <div className="text-sm text-gray-600">Skills Improved</div>
+                  <div className="text-3xl font-bold text-purple-600 mb-2">{streakData?.dailyStreak || 0}</div>
+                  <div className="text-sm text-gray-600">Current Daily Streak</div>
                 </div>
               </div>
             </div>

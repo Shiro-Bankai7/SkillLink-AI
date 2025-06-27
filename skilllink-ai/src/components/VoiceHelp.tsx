@@ -9,6 +9,9 @@ import { showNotification } from '../utils/notification';
 const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
 const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
 
+// Use the actual ElevenLabs voice ID for Rachel (replace with your real ID from ElevenLabs dashboard)
+const ELEVENLABS_RACHEL_ID = 'EXAVITQu4vr4xnSDxMaL'; // <-- Replace with your real Rachel voice ID
+
 interface Message {
   id: string;
   text: string;
@@ -31,7 +34,7 @@ export default function VoiceHelp() {
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [userLocale, setUserLocale] = useState('en'); // Default to English
+  const [userLocale, setUserLocale] = useState('en');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -65,9 +68,43 @@ export default function VoiceHelp() {
       recognitionRef.current.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error);
         setIsListening(false);
+        showNotification('Speech Recognition Error', {
+          body: 'Could not recognize speech. Please try again.',
+          icon: '/favicon.ico'
+        });
       };
     }
   }, []);
+
+  // Add OpenAI API call helper
+  async function getOpenAIResponse(prompt: string): Promise<string> {
+    try {
+      // You should proxy this call through your backend in production for security
+      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are a helpful, friendly learning and coaching assistant for SkillLink AI.' },
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 200,
+          temperature: 0.7
+        })
+      });
+      if (!response.ok) throw new Error('OpenAI API error');
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content?.trim() || 'Sorry, I could not generate a response.';
+    } catch (err) {
+      console.error('OpenAI error:', err);
+      return 'Sorry, I could not connect to the AI right now.';
+    }
+  }
 
   const handleSendMessage = async (text?: string) => {
     const messageText = text || inputText.trim();
@@ -76,9 +113,17 @@ export default function VoiceHelp() {
     // Detect language of user message
     let detectedLocale = 'en';
     try {
-      detectedLocale = await lingoDotDev.recognizeLocale(messageText);
+      // Use backend proxy for LingoDotDev language detection
+      const resp = await fetch('/api/lingo/recognizeLocale', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ text: messageText }) 
+      });
+      const data = await resp.json();
+      detectedLocale = data.locale || 'en';
       setUserLocale(detectedLocale);
     } catch (err) {
+      console.warn('Language detection failed, using English:', err);
       detectedLocale = 'en';
     }
 
@@ -93,43 +138,25 @@ export default function VoiceHelp() {
     setInputText('');
     setIsLoading(true);
 
-    // --- Streak and notification integration ---
+    // Update streak for engagement
     try {
       const streak = await StreakService.updateDailyPracticeStreak();
-      if (streak && streak.current_streak) {
-        showNotification('🔥 Daily Streak!', { body: `You are on a ${streak.current_streak}-day practice streak!` });
+      if (streak && streak.current_streak && streak.current_streak % 5 === 0) {
+        showNotification('🔥 Streak Milestone!', { 
+          body: `You've reached a ${streak.current_streak}-day streak!`,
+          icon: '/favicon.ico'
+        });
       }
     } catch (err) {
-      // Ignore streak errors
+      console.warn('Streak update failed:', err);
     }
-    // --- End streak integration ---
 
     try {
-      // Use the correct API payload for simulateConversation
-      const result = await client.conversationalAi.agents.simulateConversation(agentId, {
-        simulationSpecification: {
-          simulatedUserConfig: {
-            firstMessage: messageText,
-            language: detectedLocale || 'en'
-          }
-        }
-      });
-
-      // Extract the response text from the result
-      let responseText = 'I understand your question. Let me help you with that.';
-      
-      if (result && typeof result === 'object') {
-        // Try to extract meaningful response from the result object
-        if ('response' in result && typeof result.response === 'string') {
-          responseText = result.response;
-        } else if ('message' in result && typeof result.message === 'string') {
-          responseText = result.message;
-        } else if ('text' in result && typeof result.text === 'string') {
-          responseText = result.text;
-        } else {
-          // Fallback to a helpful response based on the user's message
-          responseText = generateFallbackResponse(messageText);
-        }
+      // Use OpenAI for a real LLM response
+      let responseText = await getOpenAIResponse(messageText);
+      // Fallback if OpenAI fails
+      if (!responseText || responseText.startsWith('Sorry')) {
+        responseText = generateFallbackResponse(messageText);
       }
 
       const agentMessage: Message = {
@@ -179,26 +206,38 @@ export default function VoiceHelp() {
 
   const playAudioResponse = async (text: string) => {
     if (!text || typeof text !== 'string' || !text.trim()) return;
+    
     let ttsText = text;
-    // Optionally translate agent response if userLocale is not 'en'
+    
+    // Translate if needed
     if (userLocale !== 'en') {
       try {
-        ttsText = await lingoDotDev.localizeText(text, {
-          sourceLocale: 'en',
-          targetLocale: userLocale
+        // Use backend proxy for LingoDotDev translation
+        const resp = await fetch('/api/lingo/localizeText', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, sourceLocale: 'en', targetLocale: userLocale })
         });
+        if (resp.ok) {
+          const data = await resp.json();
+          ttsText = data.localizedText || text;
+        } else {
+          ttsText = text;
+        }
       } catch (err) {
-        console.warn('Translation failed, using original text.', err);
+        console.warn('Translation failed, using original text:', err);
         ttsText = text;
       }
     }
+    
     try {
-      // Always send a valid TextToSpeechRequest object to ElevenLabs
+      // Use ElevenLabs TTS
       if (ttsText && typeof ttsText === 'string' && ttsText.trim()) {
         const stream = await client.textToSpeech.convert(
-          'Rachel',
+          ELEVENLABS_RACHEL_ID,
           { text: ttsText }
         );
+        
         if (stream && stream instanceof ReadableStream) {
           const response = new Response(stream);
           const blob = await response.blob();
@@ -210,8 +249,9 @@ export default function VoiceHelp() {
         }
       }
     } catch (err) {
-      console.warn('ElevenLabs TTS failed, falling back to browser TTS.', err);
+      console.warn('ElevenLabs TTS failed, falling back to browser TTS:', err);
     }
+    
     // Fallback: browser speech synthesis
     if ('speechSynthesis' in window && ttsText && ttsText.trim()) {
       const utterance = new SpeechSynthesisUtterance(ttsText);
@@ -226,6 +266,11 @@ export default function VoiceHelp() {
     if (recognitionRef.current) {
       setIsListening(true);
       recognitionRef.current.start();
+    } else {
+      showNotification('Speech Recognition Not Available', {
+        body: 'Your browser doesn\'t support speech recognition.',
+        icon: '/favicon.ico'
+      });
     }
   };
 
@@ -263,7 +308,7 @@ export default function VoiceHelp() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-end p-4 z-50"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-end sm:justify-center p-4 z-50"
             onClick={() => setIsOpen(false)}
           >
             <motion.div
@@ -271,7 +316,7 @@ export default function VoiceHelp() {
               animate={{ opacity: 1, x: 0, y: 0 }}
               exit={{ opacity: 0, x: 400, y: 100 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-white rounded-2xl shadow-2xl w-96 h-[600px] flex flex-col"
+              className="bg-white rounded-2xl shadow-2xl w-full sm:w-96 h-full sm:h-[600px] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}

@@ -15,10 +15,14 @@ import {
   ChevronRight,
   Plus,
   Globe,
-  Video
+  Video,
+  Phone,
+  PhoneOff
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { StreakService } from '../services/streakService';
+import { showNotification } from '../utils/notification';
 
 interface SkillProvider {
   id: string;
@@ -54,8 +58,12 @@ export default function SkillExchange() {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [videoCallProvider, setVideoCallProvider] = useState<SkillProvider | null>(null);
+  const [isInCall, setIsInCall] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null);
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -116,7 +124,8 @@ export default function SkillExchange() {
           email: profile.email || '',
           avatar: profile.email?.substring(0, 2).toUpperCase() || 'AN',
           skills: profile.skills || [],
-          wantsToLearn: Array.isArray(profile.lookingfor) ? profile.lookingfor : [profile.lookingfor].filter(Boolean),
+          wantsToLearn: Array.isArray(profile.lookingfor) ? profile.lookingfor : 
+                       typeof profile.lookingfor === 'string' ? [profile.lookingfor] : [],
           rating: Math.random() * 1 + 4, // Random rating between 4-5
           reviewCount: Math.floor(Math.random() * 50) + 5,
           location: profile.location || 'Remote',
@@ -152,7 +161,7 @@ export default function SkillExchange() {
   };
 
   // Helper: is profile complete?
-  const isProfileComplete = profile && profile.bio && profile.skills && profile.skills.length > 0 && profile.lookingfor && profile.lookingfor.length > 0;
+  const isProfileComplete = profile && profile.bio && profile.skills && profile.skills.length > 0 && profile.lookingfor;
 
   const filteredProviders = providers.filter(provider => {
     const matchesSearch = provider.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -180,7 +189,13 @@ export default function SkillExchange() {
         return;
       }
 
-      alert('Connection request sent!');
+      showNotification('Connection Request Sent!', {
+        body: 'Your connection request has been sent successfully.',
+        icon: '/favicon.ico'
+      });
+
+      // Update streak for engagement
+      await StreakService.updateDailyPracticeStreak();
     } catch (error) {
       console.error('Error connecting:', error);
     }
@@ -208,34 +223,113 @@ export default function SkillExchange() {
         return;
       }
 
-      alert('Session scheduled! Check your dashboard for details.');
+      showNotification('Session Scheduled!', {
+        body: 'Your skill exchange session has been scheduled. Check your dashboard for details.',
+        icon: '/favicon.ico'
+      });
     } catch (error) {
       console.error('Error scheduling:', error);
     }
   };
 
-  const handleStartVideoCall = async (provider: SkillProvider) => {
-    setVideoCallProvider(provider);
-    setShowVideoCall(true);
-    // Start local camera for demo (replace with real peer connection for production)
+  // WebRTC Video Call Implementation
+  const initializePeerConnection = () => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        // In a real app, send this to the remote peer via signaling server
+        console.log('ICE candidate:', event.candidate);
+      }
+    };
+
+    pc.ontrack = (event) => {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+        setRemoteStream(event.streams[0]);
+      }
+    };
+
+    return pc;
+  };
+
+  const startVideoCall = async (provider: SkillProvider) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setVideoCallProvider(provider);
+      setShowVideoCall(true);
+      setIsInCall(true);
+
+      // Get user media
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      
       setLocalStream(stream);
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
-    } catch (err) {
-      alert('Could not access camera/mic.');
+
+      // Initialize peer connection
+      const pc = initializePeerConnection();
+      setPeerConnection(pc);
+
+      // Add local stream to peer connection
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream);
+      });
+
+      // Create offer (in a real app, this would be coordinated via signaling server)
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Update streak for video session
+      await StreakService.updateDailyPracticeStreak();
+
+      showNotification('Video Call Started!', {
+        body: `Starting video call with ${provider.name}`,
+        icon: '/favicon.ico'
+      });
+
+    } catch (error) {
+      console.error('Error starting video call:', error);
+      showNotification('Call Failed', {
+        body: 'Could not start video call. Please check your camera and microphone permissions.',
+        icon: '/favicon.ico'
+      });
     }
   };
 
-  const handleEndVideoCall = () => {
+  const endVideoCall = () => {
+    setIsInCall(false);
     setShowVideoCall(false);
     setVideoCallProvider(null);
+
+    // Clean up streams
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
       setLocalStream(null);
     }
+    if (remoteStream) {
+      remoteStream.getTracks().forEach(track => track.stop());
+      setRemoteStream(null);
+    }
+
+    // Close peer connection
+    if (peerConnection) {
+      peerConnection.close();
+      setPeerConnection(null);
+    }
+
+    showNotification('Call Ended', {
+      body: 'Video call has ended successfully.',
+      icon: '/favicon.ico'
+    });
   };
 
   // Persist searchTerm and selectedSkill to localStorage whenever they change
@@ -407,11 +501,11 @@ export default function SkillExchange() {
                 </button>
                 
                 <button
-                  onClick={() => handleStartVideoCall(provider)}
+                  onClick={() => startVideoCall(provider)}
                   className="flex-1 lg:w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center space-x-2"
                 >
                   <Video className="w-4 h-4" />
-                  <span>Start Video Call</span>
+                  <span>Video Call</span>
                 </button>
                 
                 <div className="flex space-x-2">
@@ -532,6 +626,10 @@ export default function SkillExchange() {
                     setOfferSuccess('Skill offer submitted!');
                     setOfferSkill('');
                     setOfferDescription('');
+                    
+                    // Update streak for engagement
+                    await StreakService.updateDailyPracticeStreak();
+                    
                     setTimeout(() => {
                       setShowOfferSkillsModal(false);
                       setOfferSuccess('');
@@ -590,23 +688,78 @@ export default function SkillExchange() {
 
       {/* Video Call Modal */}
       {showVideoCall && videoCallProvider && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 flex flex-col items-center">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Video Call with {videoCallProvider.name}</h3>
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-64 h-48 bg-black rounded-lg mb-4 border"
-            />
-            <p className="text-gray-600 mb-4">(Demo: This is your local camera preview. For real calls, integrate a service like Daily, Agora, or WebRTC peer connection.)</p>
-            <button
-              onClick={handleEndVideoCall}
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg font-medium"
-            >
-              End Call
-            </button>
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+          <div className="w-full h-full max-w-6xl max-h-screen p-4 flex flex-col">
+            {/* Call Header */}
+            <div className="flex justify-between items-center mb-4 text-white">
+              <div>
+                <h3 className="text-xl font-semibold">Video Call with {videoCallProvider.name}</h3>
+                <p className="text-gray-300">Skill Exchange Session</p>
+              </div>
+              <button
+                onClick={endVideoCall}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+              >
+                <PhoneOff className="w-4 h-4" />
+                <span>End Call</span>
+              </button>
+            </div>
+
+            {/* Video Grid */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Local Video */}
+              <div className="relative bg-gray-800 rounded-lg overflow-hidden">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+                  You
+                </div>
+              </div>
+
+              {/* Remote Video */}
+              <div className="relative bg-gray-800 rounded-lg overflow-hidden">
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+                  {videoCallProvider.name}
+                </div>
+                {!remoteStream && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Users className="w-8 h-8" />
+                      </div>
+                      <p>Waiting for {videoCallProvider.name} to join...</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Call Controls */}
+            <div className="flex justify-center items-center space-x-4 mt-4">
+              <button className="bg-gray-600 hover:bg-gray-700 text-white p-3 rounded-full">
+                <Video className="w-5 h-5" />
+              </button>
+              <button className="bg-gray-600 hover:bg-gray-700 text-white p-3 rounded-full">
+                <Phone className="w-5 h-5" />
+              </button>
+              <button
+                onClick={endVideoCall}
+                className="bg-red-500 hover:bg-red-600 text-white p-3 rounded-full"
+              >
+                <PhoneOff className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       )}
