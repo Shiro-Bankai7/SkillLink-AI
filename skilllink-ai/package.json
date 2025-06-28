@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -12,10 +13,12 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.80.0",
     "@elevenlabs/elevenlabs-js": "^2.3.0",
     "@elevenlabs/react": "^0.1.7",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@excalidraw/excalidraw": "^0.18.0",
     "@headlessui/react": "^2.2.4",
     "@mui/icons-material": "^7.1.1",
     "@mui/material": "^7.1.1",

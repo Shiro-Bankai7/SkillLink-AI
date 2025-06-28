@@ -23,6 +23,8 @@ import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { StreakService } from '../services/streakService';
 import { showNotification } from '../utils/notification';
+import Call from './Call';
+import { BlockchainSessionService } from '../utils/blockchainSession';
 
 interface SkillProvider {
   id: string;
@@ -72,6 +74,10 @@ export default function SkillExchange() {
   const [offerDescription, setOfferDescription] = useState('');
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [offerSuccess, setOfferSuccess] = useState('');
+  const [showSkillLinkCall, setShowSkillLinkCall] = useState(false);
+  const [activeSessionProvider, setActiveSessionProvider] = useState<SkillProvider | null>(null);
+  const [blockchainSessionId, setBlockchainSessionId] = useState<string | null>(null);
+  const [blockchainLoading, setBlockchainLoading] = useState(false);
 
   const skillCategories = [
     'All Skills',
@@ -332,6 +338,37 @@ export default function SkillExchange() {
     });
   };
 
+  // Handler to start a secure SkillLink session
+  const startSkillLinkSession = async (provider: SkillProvider) => {
+    if (!user) {
+      alert('You must be logged in to start a session.');
+      return;
+    }
+    setBlockchainLoading(true);
+    try {
+      // Generate a unique session ID
+      const sessionId = `session_${Date.now()}_${user.id}_${provider.id}`;
+      // Prompt for sender mnemonic (in production, use wallet connect or secure input)
+      const senderMnemonic = prompt('Enter your Algorand mnemonic to start the session (for demo only):');
+      if (!senderMnemonic) throw new Error('Mnemonic required');
+      // Store session on blockchain
+      await BlockchainSessionService.storeSessionOnBlockchain({
+        sessionId,
+        participants: [user.id, provider.id],
+        sessionType: 'skill_exchange',
+        duration: 0,
+        skills: provider.skills
+      }, senderMnemonic);
+      setBlockchainSessionId(sessionId);
+      setActiveSessionProvider(provider);
+      setShowSkillLinkCall(true);
+    } catch (err) {
+      alert('Failed to start secure session: ' + (err as Error).message);
+    } finally {
+      setBlockchainLoading(false);
+    }
+  };
+
   // Persist searchTerm and selectedSkill to localStorage whenever they change
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -501,11 +538,12 @@ export default function SkillExchange() {
                 </button>
                 
                 <button
-                  onClick={() => startVideoCall(provider)}
+                  onClick={() => startSkillLinkSession(provider)}
                   className="flex-1 lg:w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center space-x-2"
+                  disabled={blockchainLoading}
                 >
                   <Video className="w-4 h-4" />
-                  <span>Video Call</span>
+                  <span>{blockchainLoading && activeSessionProvider?.id === provider.id ? 'Starting...' : 'Secure Video Call'}</span>
                 </button>
                 
                 <div className="flex space-x-2">
@@ -686,82 +724,22 @@ export default function SkillExchange() {
         </div>
       )}
 
-      {/* Video Call Modal */}
-      {showVideoCall && videoCallProvider && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-          <div className="w-full h-full max-w-6xl max-h-screen p-4 flex flex-col">
-            {/* Call Header */}
-            <div className="flex justify-between items-center mb-4 text-white">
-              <div>
-                <h3 className="text-xl font-semibold">Video Call with {videoCallProvider.name}</h3>
-                <p className="text-gray-300">Skill Exchange Session</p>
-              </div>
+      {/* Skill Link Call Modal (replaces old video call modal) */}
+      {showSkillLinkCall && activeSessionProvider && blockchainSessionId && (
+        <>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-lg p-4 max-w-3xl w-full relative">
               <button
-                onClick={endVideoCall}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+                onClick={() => { setShowSkillLinkCall(false); setActiveSessionProvider(null); setBlockchainSessionId(null); }}
               >
-                <PhoneOff className="w-4 h-4" />
-                <span>End Call</span>
+                Close
               </button>
-            </div>
-
-            {/* Video Grid */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Local Video */}
-              <div className="relative bg-gray-800 rounded-lg overflow-hidden">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
-                  You
-                </div>
-              </div>
-
-              {/* Remote Video */}
-              <div className="relative bg-gray-800 rounded-lg overflow-hidden">
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
-                  {videoCallProvider.name}
-                </div>
-                {!remoteStream && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center text-white">
-                      <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Users className="w-8 h-8" />
-                      </div>
-                      <p>Waiting for {videoCallProvider.name} to join...</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Call Controls */}
-            <div className="flex justify-center items-center space-x-4 mt-4">
-              <button className="bg-gray-600 hover:bg-gray-700 text-white p-3 rounded-full">
-                <Video className="w-5 h-5" />
-              </button>
-              <button className="bg-gray-600 hover:bg-gray-700 text-white p-3 rounded-full">
-                <Phone className="w-5 h-5" />
-              </button>
-              <button
-                onClick={endVideoCall}
-                className="bg-red-500 hover:bg-red-600 text-white p-3 rounded-full"
-              >
-                <PhoneOff className="w-5 h-5" />
-              </button>
+              <Call />
+              <div className="mt-2 text-xs text-gray-500">Session ID: {blockchainSessionId} (encrypted & on-chain)</div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

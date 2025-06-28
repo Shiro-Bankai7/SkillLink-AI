@@ -47,6 +47,7 @@ import UserProfile from '../components/UserProfile';
 import { showNotification } from '../utils/notification';
 import { StreakService } from '../services/streakService';
 import BoltBadge from '../components/BoltBadge';
+import Call from '../components/Call';
 
 interface UserProfile {
   id: string;
@@ -145,6 +146,7 @@ export default function Dashboard() {
   // Add state for real progress and achievements
   const [userProgress, setUserProgress] = useState<any>(null);
   const [userAchievements, setUserAchievements] = useState<Achievement[]>([]);
+  const [showQuickSession, setShowQuickSession] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -206,33 +208,23 @@ export default function Dashboard() {
   // Fetch real progress data (example: from Supabase or your backend)
   const fetchUserProgress = async () => {
     if (!user) return;
-    // Example: fetch from a 'progress' table or calculate from sessions
-    // Replace with your actual logic
-    const { data, error } = await supabase
-      .from('progress')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-    if (!error && data) {
-      setUserProgress(data);
-    } else {
-      // Fallback: calculate from sessions
-      const skills = [
-        { skill: 'Public Speaking', level: 0, change: '+0%' },
-        { skill: 'UI/UX Design', level: 0, change: '+0%' },
-        { skill: 'Programming', level: 0, change: '+0%' },
-        { skill: 'Language Learning', level: 0, change: '+0%' }
-      ];
-      // Example: count completed sessions by skill
-      sessions.forEach(s => {
-        const skill = skills.find(sk => sk.skill.toLowerCase() === s.skill?.toLowerCase());
-        if (skill && s.status === 'completed') {
-          skill.level += 10; // Example increment
-          skill.change = '+10%';
-        }
-      });
-      setUserProgress({ skills });
-    }
+    // Use profile.skills as the base skill list
+    let skillNames: string[] = Array.isArray(profile?.skills) ? [...profile.skills] : [];
+    // Add default skills if not present
+    ["Design Thinking", "Effective Leadership"].forEach((defaultSkill) => {
+      if (!skillNames.some(s => s.toLowerCase() === defaultSkill.toLowerCase())) {
+        skillNames.push(defaultSkill);
+      }
+    });
+    // Build skills array with progress
+    const skills = skillNames.map(skill => {
+      const completedCount = sessions.filter(s => s.skill?.toLowerCase() === skill.toLowerCase() && s.status === 'completed').length;
+      // Example: each completed session = +10%, max 100%
+      const level = Math.min(100, completedCount * 10);
+      const change = completedCount > 0 ? `+${completedCount * 10}%` : '+0%';
+      return { skill, level, change };
+    });
+    setUserProgress({ skills });
   };
 
   // Fetch real achievements (example: from Supabase or calculate)
@@ -428,7 +420,7 @@ export default function Dashboard() {
                   <Zap className="w-5 h-5 text-white" />
                 </div>
                 <h1 className="text-xl font-bold text-gray-900">SkillLink AI</h1>
-              </div
+              </div>
               
               {/* Desktop Nav */}
               <div className="hidden md:flex items-center space-x-1">
@@ -482,17 +474,20 @@ export default function Dashboard() {
                             <div className="text-gray-600 text-sm">{notif.body}</div>
                           </div>
                         ))
+
+                      )
                       }
                     </div>
                   </div>
                 )}
               </button>
-              
-              {/* Profile and Menu */}
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setShowProfile(true)}
-                  className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center hover:bg-indigo-600 transition-colors"
+            </div>
+
+            {/* Profile and Menu */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center hover:bg-indigo-600 transition-colors"
                 >
                   <User className="w-4 h-4 text-white" />
                 </button>
@@ -702,6 +697,32 @@ export default function Dashboard() {
                 </div>
               </motion.div>
             </div>
+
+            {/* Quick Random Session */}
+            <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 flex flex-col items-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Quick Random Session</h3>
+              <p className="text-gray-600 mb-4 text-center">Jump into a live SkillLink video room with whiteboard and AI assistant for instant practice or peer exchange.</p>
+              <button
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium"
+                onClick={() => setShowQuickSession(true)}
+              >
+                Start Quick Session
+              </button>
+            </div>
+            {showQuickSession && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div className="bg-white rounded-lg shadow-lg p-4 max-w-3xl w-full relative">
+                  <button
+                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowQuickSession(false)}
+                  >
+                    Close
+                  </button>
+                  <Call />
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 

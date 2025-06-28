@@ -5,12 +5,16 @@ import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import lingoDotDev from '../utils/lingoDotDev';
 import { StreakService } from '../services/streakService';
 import { showNotification } from '../utils/notification';
+import axios from "axios";
 
 const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
 const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
 
 // Use the actual ElevenLabs voice ID for Rachel (replace with your real ID from ElevenLabs dashboard)
 const ELEVENLABS_RACHEL_ID = 'EXAVITQu4vr4xnSDxMaL'; // <-- Replace with your real Rachel voice ID
+
+const HUGGING_FACE_API_URL = "https://skilllink-ai.hf.space/run/predict";
+const HUGGING_FACE_API_KEY = "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";
 
 interface Message {
   id: string;
@@ -76,33 +80,23 @@ export default function VoiceHelp() {
     }
   }, []);
 
-  // Add OpenAI API call helper
-  async function getOpenAIResponse(prompt: string): Promise<string> {
+  // Hugging Face LLM call
+  async function getHuggingFaceResponse(prompt: string): Promise<string> {
     try {
-      // You should proxy this call through your backend in production for security
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: 'You are a helpful, friendly learning and coaching assistant for SkillLink AI.' },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 200,
-          temperature: 0.7
-        })
-      });
-      if (!response.ok) throw new Error('OpenAI API error');
-      const data = await response.json();
-      return data.choices?.[0]?.message?.content?.trim() || 'Sorry, I could not generate a response.';
+      const res = await axios.post(
+        HUGGING_FACE_API_URL,
+        { inputs: prompt },
+        {
+          headers: { Authorization: `Bearer ${HUGGING_FACE_API_KEY}` },
+        }
+      );
+      // Try both array and object response
+      const reply = res.data?.[0]?.generated_text || res.data?.generated_text || "No reply";
+      // Remove the prompt from the reply if present
+      return reply.replace(prompt, "").trim() || "No reply";
     } catch (err) {
-      console.error('OpenAI error:', err);
-      return 'Sorry, I could not connect to the AI right now.';
+      console.error("Hugging Face error:", err);
+      return "Sorry, I could not connect to the coach right now.";
     }
   }
 
@@ -152,9 +146,9 @@ export default function VoiceHelp() {
     }
 
     try {
-      // Use OpenAI for a real LLM response
-      let responseText = await getOpenAIResponse(messageText);
-      // Fallback if OpenAI fails
+      // Use Hugging Face for a real LLM response
+      let responseText = await getHuggingFaceResponse(messageText);
+      // Fallback if Hugging Face fails
       if (!responseText || responseText.startsWith('Sorry')) {
         responseText = generateFallbackResponse(messageText);
       }
@@ -206,9 +200,9 @@ export default function VoiceHelp() {
 
   const playAudioResponse = async (text: string) => {
     if (!text || typeof text !== 'string' || !text.trim()) return;
-    
+
     let ttsText = text;
-    
+
     // Translate if needed
     if (userLocale !== 'en') {
       try {
@@ -229,29 +223,34 @@ export default function VoiceHelp() {
         ttsText = text;
       }
     }
-    
+
     try {
-      // Use ElevenLabs TTS
-      if (ttsText && typeof ttsText === 'string' && ttsText.trim()) {
-        const stream = await client.textToSpeech.convert(
-          ELEVENLABS_RACHEL_ID,
-          { text: ttsText }
-        );
-        
-        if (stream && stream instanceof ReadableStream) {
-          const response = new Response(stream);
-          const blob = await response.blob();
-          const audioUrl = URL.createObjectURL(blob);
-          const audioObj = new Audio(audioUrl);
-          audioObj.volume = 0.8;
-          await audioObj.play();
-          return;
-        }
+      // Use ElevenLabs TTS (fix: use POST and correct endpoint)
+      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_RACHEL_ID}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+        },
+        body: JSON.stringify({ text: ttsText })
+      });
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audioObj = new Audio(audioUrl);
+        audioObj.volume = 0.8;
+        await audioObj.play();
+        return;
+      } else {
+        const errText = await response.text();
+        console.warn('ElevenLabs TTS failed:', response.status, errText);
       }
     } catch (err) {
       console.warn('ElevenLabs TTS failed, falling back to browser TTS:', err);
     }
-    
+
     // Fallback: browser speech synthesis
     if ('speechSynthesis' in window && ttsText && ttsText.trim()) {
       const utterance = new SpeechSynthesisUtterance(ttsText);

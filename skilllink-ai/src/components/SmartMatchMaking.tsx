@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { skillsDatabase, getSkillById } from '../data/skillsDatabase';
+import Call from './Call';
 
 interface MatchedUser {
   id: string;
@@ -72,6 +73,7 @@ export default function SmartMatchmaking() {
   });
   const [selectedMatch, setSelectedMatch] = useState<MatchedUser | null>(null);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showSkillLinkCall, setShowSkillLinkCall] = useState(false);
 
   useEffect(() => {
     fetchMatches();
@@ -720,6 +722,27 @@ export default function SmartMatchmaking() {
           </motion.div>
         </div>
       )}
-    </div>
-  );
-}
+
+      {/* Video Call Button */}
+      <button
+        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium mb-4"
+        onClick={() => setShowSkillLinkCall(true)}
+      >
+        Start Live Video Session
+      </button>
+            {showSkillLinkCall && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div className="bg-white rounded-lg shadow-lg p-4 max-w-3xl w-full">
+                  <button
+                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowSkillLinkCall(false)}
+                  >
+                    Close
+                  </button>
+                  <Call />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
