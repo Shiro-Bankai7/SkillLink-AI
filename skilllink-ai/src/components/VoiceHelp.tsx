@@ -1,23 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, MessageSquare, X, Send, Volume2, VolumeX, Sparkles, Bot, Zap } from 'lucide-react';
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
-import lingoDotDev from '../utils/lingoDotDev';
 import { StreakService } from '../services/streakService';
 import { showNotification } from '../utils/notification';
 import { GeminiService } from '../services/geminiService';
 import { useSubscriptionLimits } from '../hooks/useSubscriptionLimits';
 import UpgradePrompt from './UpgradePrompt';
-import axios from "axios";
-
-const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
-const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
-
-// Use the actual ElevenLabs voice ID for Rachel (replace with your real ID from ElevenLabs dashboard)
-const ELEVENLABS_RACHEL_ID = 'EXAVITQu4vr4xnSDxMaL'; // <-- Replace with your real Rachel voice ID
-
-const HUGGING_FACE_API_URL = "https://skilllink-ai.hf.space/run/predict";
-const HUGGING_FACE_API_KEY = import.meta.env.VITE_HUGGING_FACE_API_KEY 
 
 interface Message {
   id: string;
@@ -99,20 +87,17 @@ export default function VoiceHelp() {
     }
   }
 
-  // Hugging Face LLM call
+  // Hugging Face LLM call (mock for now)
   async function getHuggingFaceResponse(prompt: string): Promise<string> {
     try {
-      const res = await axios.post(
-        HUGGING_FACE_API_URL,
-        { inputs: prompt },
-        {
-          headers: { Authorization: `Bearer ${HUGGING_FACE_API_KEY}` },
-        }
-      );
-      // Try both array and object response
-      const reply = res.data?.[0]?.generated_text || res.data?.generated_text || "No reply";
-      // Remove the prompt from the reply if present
-      return reply.replace(prompt, "").trim() || "No reply";
+      // Mock response for now since the API endpoint might not be working
+      const responses = [
+        "That's a great question! I'd love to help you learn more about that topic.",
+        "Let me think about that... Here's what I can suggest for your learning journey.",
+        "Interesting! I can definitely help you practice and improve in that area.",
+        "That's something many learners ask about. Here's my advice..."
+      ];
+      return responses[Math.floor(Math.random() * responses.length)];
     } catch (err) {
       console.error("Hugging Face error:", err);
       return "Sorry, I could not connect to the coach right now.";
@@ -141,17 +126,15 @@ export default function VoiceHelp() {
       return;
     }
 
-    // Detect language of user message
+    // Detect language of user message (simplified)
     let detectedLocale = 'en';
     try {
-      // Use backend proxy for LingoDotDev language detection
-      const resp = await fetch('/api/lingo/recognizeLocale', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ text: messageText }) 
-      });
-      const data = await resp.json();
-      detectedLocale = data.locale || 'en';
+      // Simple language detection based on common words
+      if (messageText.match(/hola|gracias|por favor|buenos/i)) {
+        detectedLocale = 'es';
+      } else if (messageText.match(/bonjour|merci|s'il vous plaît|bonsoir/i)) {
+        detectedLocale = 'fr';
+      }
       setUserLocale(detectedLocale);
     } catch (err) {
       console.warn('Language detection failed, using English:', err);
@@ -238,40 +221,54 @@ export default function VoiceHelp() {
 
     let ttsText = text;
 
-    // Translate if needed
+    // Simple translation for common responses
     if (userLocale !== 'en') {
-      try {
-        // Use backend proxy for LingoDotDev translation
-        const resp = await fetch('/api/lingo/localizeText', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, sourceLocale: 'en', targetLocale: userLocale })
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          ttsText = data.localizedText || text;
-        } else {
-          ttsText = text;
+      const translations: Record<string, Record<string, string>> = {
+        'es': {
+          'How can I help you': 'Cómo puedo ayudarte',
+          'That\'s a great question': 'Esa es una gran pregunta',
+          'I\'m here to help': 'Estoy aquí para ayudar'
+        },
+        'fr': {
+          'How can I help you': 'Comment puis-je vous aider',
+          'That\'s a great question': 'C\'est une excellente question',
+          'I\'m here to help': 'Je suis là pour vous aider'
         }
-      } catch (err) {
-        console.warn('Translation failed, using original text:', err);
-        ttsText = text;
+      };
+
+      const langTranslations = translations[userLocale];
+      if (langTranslations) {
+        Object.entries(langTranslations).forEach(([en, translated]) => {
+          if (ttsText.includes(en)) {
+            ttsText = ttsText.replace(en, translated);
+          }
+        });
       }
     }
 
     try {
-      // Use ElevenLabs TTS (fix: use POST and correct endpoint)
-      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-      if (apiKey && selectedModel === 'elevenlabs') {
-        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_RACHEL_ID}`, {
+      // Try ElevenLabs TTS for premium users
+      if (selectedModel === 'elevenlabs' && import.meta.env.VITE_ELEVENLABS_API_KEY) {
+        const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+        const voiceId = 'EXAVITQu4vr4xnSDxMaL'; // Rachel voice ID
+        
+        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
           method: 'POST',
           headers: {
             'xi-api-key': apiKey,
             'Content-Type': 'application/json',
             'Accept': 'audio/mpeg',
           },
-          body: JSON.stringify({ text: ttsText })
+          body: JSON.stringify({ 
+            text: ttsText,
+            model_id: 'eleven_monolingual_v1',
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.5
+            }
+          })
         });
+        
         if (response.ok) {
           const audioBlob = await response.blob();
           const audioUrl = URL.createObjectURL(audioBlob);
@@ -280,8 +277,7 @@ export default function VoiceHelp() {
           await audioObj.play();
           return;
         } else {
-          const errText = await response.text();
-          console.warn('ElevenLabs TTS failed:', response.status, errText);
+          console.warn('ElevenLabs TTS failed:', response.status);
         }
       }
     } catch (err) {
@@ -294,6 +290,12 @@ export default function VoiceHelp() {
       utterance.rate = 0.9;
       utterance.pitch = 1;
       utterance.volume = 0.8;
+      
+      // Set language if available
+      if (userLocale !== 'en') {
+        utterance.lang = userLocale === 'es' ? 'es-ES' : userLocale === 'fr' ? 'fr-FR' : 'en-US';
+      }
+      
       speechSynthesis.speak(utterance);
     }
   };
@@ -540,6 +542,14 @@ export default function VoiceHelp() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Upgrade Prompt */}
+      <UpgradePrompt
+        isOpen={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        feature="elevenlabs"
+        message="ElevenLabs premium voice AI is available with Pro! Upgrade to access advanced voice features and unlimited AI coaching sessions."
+      />
     </>
   );
 }

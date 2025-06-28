@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Globe, TrendingUp, Clock, Award, ChevronRight } from 'lucide-react';
-import { LingoService, SupportedLanguage } from '../services/lingoService';
+import { LingoService, type SupportedLanguage } from '../services/lingoService';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LanguageLearningWidget() {

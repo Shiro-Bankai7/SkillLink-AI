@@ -15,7 +15,7 @@ export class GeminiService {
   ): Promise<GeminiResponse> {
     try {
       if (!this.apiKey) {
-        // Fallback to mock responses if no API key
+        console.warn('Gemini API key not found, using mock responses');
         return this.getMockResponse(prompt);
       }
 
@@ -65,11 +65,20 @@ export class GeminiService {
       );
 
       if (!response.ok) {
+        console.error(`Gemini API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Error details:', errorText);
         throw new Error(`Gemini API error: ${response.status}`);
       }
 
       const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I apologize, but I couldn\'t generate a response.';
+      
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        console.error('Unexpected Gemini API response structure:', data);
+        throw new Error('Invalid response structure from Gemini API');
+      }
+
+      const text = data.candidates[0].content.parts[0]?.text || 'I apologize, but I couldn\'t generate a response.';
 
       return {
         text: text.trim(),

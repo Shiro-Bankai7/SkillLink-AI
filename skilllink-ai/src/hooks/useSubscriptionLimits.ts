@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { RevenueCatService } from '../services/revenuecatService';
 import { StripeService } from '../services/stripeService';
 import { supabase } from '../services/supabase';
 
@@ -49,10 +48,8 @@ export function useSubscriptionLimits() {
     try {
       setLoading(true);
 
-      // Check subscription status from multiple sources
-      const subscriptionStatus = await RevenueCatService.getLocalSubscriptionStatus(user.id);
-      const hasActiveSub = subscriptionStatus.hasActiveSubscription;
-      
+      // Check subscription status from Stripe
+      const hasActiveSub = await StripeService.hasActiveSubscription();
       setHasActiveSubscription(hasActiveSub);
 
       // Get current usage
@@ -175,6 +172,7 @@ export function useSubscriptionLimits() {
       advancedAnalytics: 'Advanced analytics help you track your progress better. Available with Pro!',
       prioritySupport: 'Get priority support and faster response times with Pro!',
       customAICoaches: 'Create custom AI coaches tailored to your learning style with Pro!',
+      elevenlabs: 'ElevenLabs premium voice AI is available with Pro! Upgrade to access advanced voice features.',
     };
 
     return prompts[feature as keyof typeof prompts] || 'Upgrade to Pro to unlock this feature!';

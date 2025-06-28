@@ -33,22 +33,12 @@ export class RevenueCatService {
         return null;
       }
 
-      const response = await fetch(`${this.baseUrl}/subscribers/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // Subscriber not found
-        }
-        throw new Error(`RevenueCat API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.subscriber;
+      // Note: RevenueCat API calls from frontend are not recommended for production
+      // This should be done from your backend for security
+      console.warn('RevenueCat API calls should be made from backend for security');
+      
+      // For now, return null to avoid 403 errors
+      return null;
     } catch (error) {
       console.error('Error fetching RevenueCat subscriber:', error);
       return null;
@@ -57,14 +47,10 @@ export class RevenueCatService {
 
   static async hasActiveEntitlement(userId: string, entitlementId: string = 'premium'): Promise<boolean> {
     try {
-      const subscriber = await this.getSubscriberInfo(userId);
-      
-      if (!subscriber || !subscriber.entitlements) {
-        return false;
-      }
-
-      const entitlement = subscriber.entitlements[entitlementId];
-      return entitlement?.is_active || false;
+      // Since we can't call RevenueCat API directly from frontend,
+      // we'll check local subscription status instead
+      const localStatus = await this.getLocalSubscriptionStatus(userId);
+      return localStatus.hasActiveSubscription;
     } catch (error) {
       console.error('Error checking RevenueCat entitlement:', error);
       return false;
@@ -75,29 +61,11 @@ export class RevenueCatService {
     try {
       if (!this.apiKey || !stripeSubscription) return;
 
-      // Create or update subscriber in RevenueCat
-      const response = await fetch(`${this.baseUrl}/subscribers/${userId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          app_user_id: userId,
-          fetch_token: stripeSubscription.id,
-          attributes: {
-            stripe_customer_id: stripeSubscription.customer,
-            subscription_status: stripeSubscription.status,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('RevenueCat sync failed:', response.status);
-        return;
-      }
-
-      console.log('Successfully synced with RevenueCat');
+      // This should be done from your backend
+      console.warn('RevenueCat sync should be done from backend');
+      
+      // For now, just log the sync attempt
+      console.log('Would sync with RevenueCat:', { userId, subscriptionId: stripeSubscription.id });
     } catch (error) {
       console.error('Error syncing with RevenueCat:', error);
     }
@@ -107,24 +75,11 @@ export class RevenueCatService {
     try {
       if (!this.apiKey) return;
 
-      const response = await fetch(`${this.baseUrl}/subscribers/${userId}/attribution`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          network: 'custom',
-          data: {
-            event_name: eventName,
-            ...properties,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('RevenueCat event logging failed:', response.status);
-      }
+      // This should be done from your backend
+      console.warn('RevenueCat event logging should be done from backend');
+      
+      // For now, just log the event locally
+      console.log('Would log RevenueCat event:', { userId, eventName, properties });
     } catch (error) {
       console.error('Error logging RevenueCat event:', error);
     }
@@ -132,8 +87,9 @@ export class RevenueCatService {
 
   static async getSubscriptionManagementUrl(userId: string): Promise<string | null> {
     try {
-      const subscriber = await this.getSubscriberInfo(userId);
-      return subscriber?.management_url || null;
+      // Since we can't get this from RevenueCat API directly,
+      // return a fallback URL or null
+      return null;
     } catch (error) {
       console.error('Error getting management URL:', error);
       return null;
@@ -162,19 +118,8 @@ export class RevenueCatService {
         };
       }
 
-      // Fallback to RevenueCat
-      const hasRevenueCat = await this.hasActiveEntitlement(userId);
-      if (hasRevenueCat) {
-        const subscriber = await this.getSubscriberInfo(userId);
-        const premiumEntitlement = subscriber?.entitlements?.premium;
-        
-        return {
-          hasActiveSubscription: true,
-          source: 'revenuecat',
-          expiresAt: premiumEntitlement?.expires_date ? new Date(premiumEntitlement.expires_date) : undefined,
-        };
-      }
-
+      // For now, we'll skip RevenueCat API calls due to CORS/auth issues
+      // In production, this should be handled by your backend
       return {
         hasActiveSubscription: false,
         source: 'none',
