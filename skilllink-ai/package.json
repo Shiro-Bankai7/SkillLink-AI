@@ -22,7 +22,7 @@
     "@headlessui/react": "^2.2.4",
     "@mui/icons-material": "^7.1.1",
     "@mui/material": "^7.1.1",
-    "@revenuecat/purchases-js": "^1.5.3",
+    "@revenuecat/purchases-js": "^1.7.0",
     "@supabase/supabase-js": "^2.50.0",
     "@tailwindcss/vite": "^4.1.10",
     "algosdk": "^3.3.1",

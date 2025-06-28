@@ -64,6 +64,9 @@ export class StripeService {
 
       if (response.error) {
         console.error('Stripe checkout error:', response.error);
+        if (response.data) {
+          console.error('Stripe checkout response data:', response.data);
+        }
         throw new Error(response.error.message || 'Failed to create checkout session');
       }
 

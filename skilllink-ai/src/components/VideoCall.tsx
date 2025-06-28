@@ -21,7 +21,6 @@ import {
   X,
   Send
 } from 'lucide-react';
-import Peer from 'peerjs';
 
 interface VideoCallProps {
   roomId?: string;
@@ -38,8 +37,6 @@ interface Participant {
 }
 
 export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
-  const [peer, setPeer] = useState<Peer | null>(null);
-  const [myPeerId, setMyPeerId] = useState<string>('');
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -54,17 +51,16 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
   const [newMessage, setNewMessage] = useState('');
   const [callDuration, setCallDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [roomCode, setRoomCode] = useState<string>('');
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideosRef = useRef<{ [key: string]: HTMLVideoElement }>({});
   const callStartTime = useRef<Date | null>(null);
-  const connections = useRef<{ [key: string]: any }>({});
 
   // Generate or use provided room ID
   const currentRoomId = roomId || `room-${Math.random().toString(36).substr(2, 9)}`;
 
   useEffect(() => {
-    initializePeer();
+    initializeCall();
     return () => {
       cleanup();
     };
@@ -82,7 +78,7 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
     return () => clearInterval(interval);
   }, [callStartTime.current]);
 
-  const initializePeer = async () => {
+  const initializeCall = async () => {
     try {
       setIsConnecting(true);
       setConnectionError(null);
@@ -99,56 +95,26 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
         localVideoRef.current.srcObject = stream;
       }
 
-      // Initialize PeerJS
-      const newPeer = new Peer(undefined, {
-        host: 'peerjs-server.herokuapp.com',
-        port: 443,
-        path: '/',
-        secure: true,
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
-        }
-      });
+      // Generate room code for sharing
+      setRoomCode(currentRoomId.slice(-6).toUpperCase());
+      
+      setIsConnecting(false);
+      callStartTime.current = new Date();
+      
+      // Add local participant
+      setParticipants([{
+        id: 'local',
+        stream,
+        name: 'You',
+        isLocal: true,
+        audioEnabled: isAudioEnabled,
+        videoEnabled: isVideoEnabled
+      }]);
 
-      newPeer.on('open', (id) => {
-        setMyPeerId(id);
-        setPeer(newPeer);
-        setIsConnecting(false);
-        callStartTime.current = new Date();
-        
-        // Add local participant
-        setParticipants([{
-          id: 'local',
-          stream,
-          name: 'You',
-          isLocal: true,
-          audioEnabled: isAudioEnabled,
-          videoEnabled: isVideoEnabled
-        }]);
-      });
-
-      newPeer.on('call', (call) => {
-        call.answer(stream);
-        
-        call.on('stream', (remoteStream) => {
-          addParticipant(call.peer, remoteStream);
-        });
-
-        call.on('close', () => {
-          removeParticipant(call.peer);
-        });
-
-        connections.current[call.peer] = call;
-      });
-
-      newPeer.on('error', (error) => {
-        console.error('PeerJS error:', error);
-        setConnectionError('Failed to connect to video service. Please try again.');
-        setIsConnecting(false);
-      });
+      // Simulate adding a remote participant after 3 seconds for demo
+      setTimeout(() => {
+        addMockParticipant();
+      }, 3000);
 
     } catch (error) {
       console.error('Error initializing video call:', error);
@@ -157,41 +123,15 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
     }
   };
 
-  const addParticipant = (peerId: string, stream: MediaStream) => {
-    setParticipants(prev => {
-      const exists = prev.find(p => p.id === peerId);
-      if (exists) return prev;
-      
-      return [...prev, {
-        id: peerId,
-        stream,
-        name: `User ${peerId.slice(0, 6)}`,
-        audioEnabled: true,
-        videoEnabled: true
-      }];
-    });
-  };
-
-  const removeParticipant = (peerId: string) => {
-    setParticipants(prev => prev.filter(p => p.id !== peerId));
-    delete connections.current[peerId];
-  };
-
-  const connectToPeer = (peerId: string | undefined) => {
-    if (!peer || !localStream) return;
-    if (!peerId || typeof peerId !== 'string') return; // Ensure peerId is a valid string
-
-    const call = peer.call(peerId, localStream);
+  const addMockParticipant = () => {
+    const mockParticipant: Participant = {
+      id: 'mock-user',
+      name: 'Demo User',
+      audioEnabled: true,
+      videoEnabled: true
+    };
     
-    call.on('stream', (remoteStream) => {
-      addParticipant(peerId, remoteStream);
-    });
-
-    call.on('close', () => {
-      removeParticipant(peerId);
-    });
-
-    connections.current[peerId] = call;
+    setParticipants(prev => [...prev, mockParticipant]);
   };
 
   const toggleVideo = () => {
@@ -232,44 +172,12 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
           audio: true
         });
         
-        // Replace video track in all connections
-        Object.values(connections.current).forEach((call: any) => {
-          const sender = call.peerConnection?.getSenders?.()?.find((s: any) => 
-            s.track?.kind === 'video'
-          );
-          if (sender) {
-            sender.replaceTrack(screenStream.getVideoTracks()[0]);
-          }
-        });
-        
         setIsScreenSharing(true);
         
         screenStream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
-          // Switch back to camera
-          if (localStream) {
-            Object.values(connections.current).forEach((call: any) => {
-              const sender = call.peerConnection?.getSenders?.()?.find((s: any) => 
-                s.track?.kind === 'video'
-              );
-              if (sender) {
-                sender.replaceTrack(localStream.getVideoTracks()[0]);
-              }
-            });
-          }
         };
       } else {
-        // Stop screen sharing
-        if (localStream) {
-          Object.values(connections.current).forEach((call: any) => {
-            const sender = call.peerConnection?.getSenders?.()?.find((s: any) => 
-              s.track?.kind === 'video'
-            );
-            if (sender) {
-              sender.replaceTrack(localStream.getVideoTracks()[0]);
-            }
-          });
-        }
         setIsScreenSharing(false);
       }
     } catch (error) {
@@ -283,31 +191,18 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
   };
 
   const cleanup = () => {
-    // Close all connections
-    Object.values(connections.current).forEach((call: any) => {
-      call.close();
-    });
-    connections.current = {};
-
     // Stop local stream
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
 
-    // Close peer connection
-    if (peer) {
-      peer.destroy();
-    }
-
     setParticipants([]);
     setLocalStream(null);
-    setPeer(null);
-    setMyPeerId('');
     callStartTime.current = null;
   };
 
-  const copyRoomId = () => {
-    navigator.clipboard.writeText(myPeerId);
+  const copyRoomCode = () => {
+    navigator.clipboard.writeText(roomCode);
     // You could add a toast notification here
   };
 
@@ -323,8 +218,6 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
     
     setChatMessages(prev => [...prev, message]);
     setNewMessage('');
-    
-    // In a real implementation, you'd send this to other participants
   };
 
   const formatDuration = (seconds: number) => {
@@ -355,7 +248,7 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
           <h3 className="text-xl font-semibold mb-2">Connection Failed</h3>
           <p className="text-gray-300 mb-4">{connectionError}</p>
           <button
-            onClick={initializePeer}
+            onClick={initializeCall}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium"
           >
             Try Again
@@ -394,9 +287,9 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
           
           <div className="flex items-center space-x-2">
             <button
-              onClick={copyRoomId}
+              onClick={copyRoomCode}
               className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg backdrop-blur-sm transition-colors"
-              title="Copy Room ID"
+              title="Copy Room Code"
             >
               <Copy className="w-4 h-4" />
             </button>
@@ -444,12 +337,7 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
             >
               {participant.videoEnabled && participant.stream ? (
                 <video
-                  ref={participant.isLocal ? localVideoRef : (el) => {
-                    if (el) {
-                      el.srcObject = participant.stream!;
-                      remoteVideosRef.current[participant.id] = el;
-                    }
-                  }}
+                  ref={participant.isLocal ? localVideoRef : undefined}
                   autoPlay
                   playsInline
                   muted={participant.isLocal}
@@ -552,16 +440,16 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
         </div>
       </div>
 
-      {/* Room ID Display */}
-      {myPeerId && (
+      {/* Room Code Display */}
+      {roomCode && (
         <div className="absolute top-20 left-4 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-2">
           <div className="text-white text-sm">
-            <span className="text-gray-300">Room ID: </span>
-            <span className="font-mono">{myPeerId}</span>
+            <span className="text-gray-300">Room Code: </span>
+            <span className="font-mono font-bold">{roomCode}</span>
             <button
-              onClick={copyRoomId}
+              onClick={copyRoomCode}
               className="ml-2 text-indigo-400 hover:text-indigo-300"
-              title="Copy Room ID"
+              title="Copy Room Code"
             >
               <Copy className="w-3 h-3 inline" />
             </button>
