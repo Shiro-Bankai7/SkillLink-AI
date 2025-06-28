@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 
 type AuthFormData = {
   email: string;
@@ -11,15 +11,17 @@ type AuthFormData = {
   confirmPassword?: string;
 };
 
-export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup' }) {
+interface AuthFormProps {
+  mode?: 'login' | 'signup';
+}
+
+export default function AuthForm({ mode = 'login' }: AuthFormProps) {
   const { register, handleSubmit, watch, formState: { errors } } = useForm<AuthFormData>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [success, setSuccess] = useState('');
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendSuccess, setResendSuccess] = useState('');
   const navigate = useNavigate();
   const password = watch('password');
 
@@ -27,6 +29,7 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
     setError('');
     setSuccess('');
     setLoading(true);
+    
     const { email, password } = data;
 
     try {
@@ -35,7 +38,7 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
           email, 
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/create-profile`
+            emailRedirectTo: `${window.location.origin}/dashboard`
           }
         });
 
@@ -44,10 +47,27 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
           return;
         }
 
-        if (authData.user && !authData.user.email_confirmed_at) {
-          setSuccess('Please check your email and click the confirmation link to complete your registration.');
-        } else if (authData.user && authData.user.email_confirmed_at) {
-          navigate('/create-profile');
+        if (authData.user) {
+          // Create profile entry
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              bio: '',
+              skills: [],
+              lookingfor: '',
+              role: 'both',
+              plan: 'free',
+            });
+
+          if (profileError) {
+            console.error('Error creating profile:', profileError);
+          }
+
+          setSuccess('Account created successfully! You can now sign in.');
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 1500);
         }
       } else {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
@@ -76,11 +96,10 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
     setError('');
     
     try {
-      const redirectTo = mode === 'signup' ? '/create-profile' : '/dashboard';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}${redirectTo}`,
+          redirectTo: `${window.location.origin}/dashboard`,
         },
       });
       
@@ -88,53 +107,11 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
         setError(error.message);
         return;
       }
-      // Wait for session to be available after redirect
-      setTimeout(async () => {
-        const session = (await supabase.auth.getSession()).data.session;
-        const user = session?.user;
-        if (user) {
-          // Upsert user info into profiles table
-          await supabase.from('profiles').upsert({
-            id: user.id,
-            email: user.email,
-            bio: '',
-            skills: [],
-            lookingfor: '',
-            role: 'both',
-            plan: 'free',
-          });
-        }
-      }, 2000);
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleResendConfirmation = async () => {
-    setResendLoading(true);
-    setResendSuccess('');
-    setError('');
-    const email = watch('email');
-    if (!email) {
-      setError('Please enter your email above first.');
-      setResendLoading(false);
-      return;
-    }
-    const { error: resendError } = await supabase.auth.resend({
-      type: 'signup',
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/create-profile`
-      }
-    });
-    if (resendError) {
-      setError(resendError.message);
-    } else {
-      setResendSuccess('Confirmation email resent! Please check your inbox.');
-    }
-    setResendLoading(false);
   };
 
   return (
@@ -192,7 +169,10 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
                 />
               </div>
               {errors.email && (
-                <p className="text-red-500 text-sm">{errors.email.message}</p>
+                <div className="flex items-center space-x-2 text-red-500 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.email.message}</span>
+                </div>
               )}
             </div>
 
@@ -222,7 +202,10 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
                 </button>
               </div>
               {errors.password && (
-                <p className="text-red-500 text-sm">{errors.password.message}</p>
+                <div className="flex items-center space-x-2 text-red-500 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{errors.password.message}</span>
+                </div>
               )}
             </div>
 
@@ -250,7 +233,10 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
                   </button>
                 </div>
                 {errors.confirmPassword && (
-                  <p className="text-red-500 text-sm">{errors.confirmPassword.message}</p>
+                  <div className="flex items-center space-x-2 text-red-500 text-sm">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.confirmPassword.message}</span>
+                  </div>
                 )}
               </div>
             )}
@@ -262,18 +248,10 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
                 animate={{ opacity: 1, scale: 1 }}
                 className="p-3 bg-green-50 border border-green-200 rounded-xl"
               >
-                <p className="text-green-600 text-sm text-center">{success}</p>
-                {mode === 'signup' && (
-                  <button
-                    type="button"
-                    onClick={handleResendConfirmation}
-                    disabled={resendLoading}
-                    className="mt-2 text-indigo-600 hover:underline text-sm font-medium"
-                  >
-                    {resendLoading ? 'Resending...' : 'Resend confirmation email'}
-                  </button>
-                )}
-                {resendSuccess && <p className="text-green-700 text-xs mt-1">{resendSuccess}</p>}
+                <div className="flex items-center space-x-2 text-green-600">
+                  <CheckCircle className="w-5 h-5" />
+                  <p className="text-sm font-medium">{success}</p>
+                </div>
               </motion.div>
             )}
 
@@ -284,7 +262,10 @@ export default function AuthForm({ mode = 'login' }: { mode?: 'login' | 'signup'
                 animate={{ opacity: 1, scale: 1 }}
                 className="p-3 bg-red-50 border border-red-200 rounded-xl"
               >
-                <p className="text-red-600 text-sm text-center">{error}</p>
+                <div className="flex items-center space-x-2 text-red-600">
+                  <AlertCircle className="w-5 h-5" />
+                  <p className="text-sm font-medium">{error}</p>
+                </div>
               </motion.div>
             )}
 

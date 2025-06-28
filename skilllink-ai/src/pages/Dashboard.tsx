@@ -29,7 +29,8 @@ import {
   User,
   LogOut,
   Menu,
-  X
+  X,
+  Crown
 } from 'lucide-react';
 import { Dialog } from '@headlessui/react';
 
@@ -44,8 +45,10 @@ import VideoAnalysis from '../components/VideoAnalysis';
 import VoiceHelp from '../components/VoiceHelp';
 import TavusConversationSession from '../components/TavusConversationSession';
 import UserProfile from '../components/UserProfile';
+import SubscriptionStatus from '../components/SubscriptionStatus';
 import { showNotification } from '../utils/notification';
 import { StreakService } from '../services/streakService';
+import { StripeService } from '../services/stripeService';
 import BoltBadge from '../components/BoltBadge';
 import Call from '../components/Call';
 
@@ -147,6 +150,8 @@ export default function Dashboard() {
   const [userProgress, setUserProgress] = useState<any>(null);
   const [userAchievements, setUserAchievements] = useState<Achievement[]>([]);
   const [showQuickSession, setShowQuickSession] = useState(false);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<any>(null);
 
   useEffect(() => {
     fetchProfile();
@@ -154,6 +159,7 @@ export default function Dashboard() {
     fetchStreakData();
     fetchUserProgress();
     fetchUserAchievements();
+    checkSubscriptionStatus();
     
     // Request notification permission
     if ('Notification' in window && Notification.permission === 'default') {
@@ -170,6 +176,20 @@ export default function Dashboard() {
     }
     return () => clearInterval(interval);
   }, [isRecording]);
+
+  const checkSubscriptionStatus = async () => {
+    try {
+      const [isActive, plan] = await Promise.all([
+        StripeService.hasActiveSubscription(),
+        StripeService.getCurrentPlan()
+      ]);
+      
+      setHasActiveSubscription(isActive);
+      setCurrentPlan(plan);
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+    }
+  };
 
   const fetchProfile = async () => {
     if (!user) return;
@@ -485,6 +505,14 @@ export default function Dashboard() {
 
             {/* Profile and Menu */}
             <div className="flex items-center space-x-2">
+              {/* Subscription Status Indicator */}
+              {hasActiveSubscription && (
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                  <Crown className="w-4 h-4" />
+                  <span>Pro</span>
+                </div>
+              )}
+              
               <button
                 onClick={() => setShowProfile(true)}
                 className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center hover:bg-indigo-600 transition-colors"
@@ -584,6 +612,9 @@ export default function Dashboard() {
 
             {/* Voice Help AI Agent */}
             <VoiceHelp />
+
+            {/* Subscription Status */}
+            <SubscriptionStatus />
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -726,6 +757,68 @@ export default function Dashboard() {
           </div>
         )}
 
+        {activeTab === 'sessions' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <h2 className="text-2xl font-bold text-gray-900">My Sessions</h2>
+              <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                <Plus className="w-4 h-4" />
+                <span>Book Session</span>
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
+              <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                <Filter className="w-4 h-4" />
+                <span>Filter</span>
+              </button>
+              <select className="px-4 py-2 border border-gray-300 rounded-lg">
+                <option>All Sessions</option>
+                <option>AI Coaching</option>
+                <option>Skill Exchange</option>
+                <option>Group Sessions</option>
+              </select>
+            </div>
+
+            <div className="grid gap-6">
+              {sessions.map((session) => (
+                <motion.div
+                  key={session.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex items-start space-x-4">
+                      <div className="p-3 bg-indigo-100 rounded-lg">
+                        {getTypeIcon(session.type)}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{session.title}</h3>
+                        <p className="text-gray-600 capitalize">{session.type.replace('_', ' ')}</p>
+                        <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-500">
+                          <span>{new Date(session.date).toLocaleDateString()}</span>
+                          <span>{session.duration} minutes</span>
+                          {session.participants && <span>{session.participants} participants</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(session.status)}`}>
+                        {session.status.replace('_', ' ')}
+                      </span>
+                      <button className="text-gray-400 hover:text-gray-600">
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            <SessionReplays />
+          </div>
+        )}
+
         {activeTab === 'practice' && (
           <div className="space-y-6 sm:space-y-8">
             {/* Conversation Coach Studio */}
@@ -846,68 +939,6 @@ export default function Dashboard() {
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Video Analysis</h2>
               <VideoAnalysis />
             </motion.div>
-          </div>
-        )}
-
-        {activeTab === 'sessions' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <h2 className="text-2xl font-bold text-gray-900">My Sessions</h2>
-              <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
-                <Plus className="w-4 h-4" />
-                <span>Book Session</span>
-              </button>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
-              <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                <Filter className="w-4 h-4" />
-                <span>Filter</span>
-              </button>
-              <select className="px-4 py-2 border border-gray-300 rounded-lg">
-                <option>All Sessions</option>
-                <option>AI Coaching</option>
-                <option>Skill Exchange</option>
-                <option>Group Sessions</option>
-              </select>
-            </div>
-
-            <div className="grid gap-6">
-              {sessions.map((session) => (
-                <motion.div
-                  key={session.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div className="flex items-start space-x-4">
-                      <div className="p-3 bg-indigo-100 rounded-lg">
-                        {getTypeIcon(session.type)}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">{session.title}</h3>
-                        <p className="text-gray-600 capitalize">{session.type.replace('_', ' ')}</p>
-                        <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-gray-500">
-                          <span>{new Date(session.date).toLocaleDateString()}</span>
-                          <span>{session.duration} minutes</span>
-                          {session.participants && <span>{session.participants} participants</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(session.status)}`}>
-                        {session.status.replace('_', ' ')}
-                      </span>
-                      <button className="text-gray-400 hover:text-gray-600">
-                        <Settings className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-            <SessionReplays />
           </div>
         )}
 

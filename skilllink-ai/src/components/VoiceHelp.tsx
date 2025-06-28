@@ -14,7 +14,7 @@ const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_AP
 const ELEVENLABS_RACHEL_ID = 'EXAVITQu4vr4xnSDxMaL'; // <-- Replace with your real Rachel voice ID
 
 const HUGGING_FACE_API_URL = "https://skilllink-ai.hf.space/run/predict";
-const HUGGING_FACE_API_KEY = "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";
+const HUGGING_FACE_API_KEY = import.meta.env.VITE_HUGGING_FACE_API_KEY 
 
 interface Message {
   id: string;
