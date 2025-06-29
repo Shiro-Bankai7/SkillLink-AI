@@ -1,9 +1,9 @@
+import React, { useState } from 'react';
 import VideoCall from './VideoCall';
 import Whiteboard from './Whiteboard';
 import AIAssistant from "./AIAssistant";
 import ErrorBoundary from "./ErrorBoundary";
-import { useState } from "react";
-import { Bot, Lightbulb, Mic, PhoneOff, Users, Video, MessageSquare, Monitor, Settings } from 'lucide-react';
+import { Bot, Lightbulb, Video, MessageSquare, Monitor, Settings, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface UserInfo {
@@ -12,16 +12,40 @@ interface UserInfo {
   email?: string;
 }
 
-export default function Call({ currentUser, matchedUser }: { currentUser: UserInfo; matchedUser: UserInfo }) {
+interface CallProps {
+  currentUser: UserInfo;
+  matchedUser: UserInfo;
+  onBack?: () => void;
+}
+
+export default function Call({ currentUser, matchedUser, onBack }: CallProps) {
   const [aiOpen, setAiOpen] = useState(false);
   const [suggestion, setSuggestion] = useState("Try using the whiteboard to sketch your ideas!");
   const [showSuggestion, setShowSuggestion] = useState(true);
   const [activeView, setActiveView] = useState<'video' | 'whiteboard' | 'both'>('both');
+  const [showVideoCall, setShowVideoCall] = useState(false);
 
   const handleCallEnd = () => {
-    // Handle call end logic here
+    setShowVideoCall(false);
     console.log('Call ended');
   };
+
+  const handleStartVideoCall = () => {
+    setShowVideoCall(true);
+  };
+
+  if (showVideoCall) {
+    return (
+      <div className="w-full h-full">
+        <VideoCall
+          currentUser={currentUser}
+          matchedUser={matchedUser}
+          onCallEnd={handleCallEnd}
+          onBack={() => setShowVideoCall(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-gray-900 to-indigo-900 flex flex-col relative overflow-hidden">
@@ -41,6 +65,15 @@ export default function Call({ currentUser, matchedUser }: { currentUser: UserIn
         className="relative z-10 w-full max-w-7xl mx-auto flex items-center justify-between px-6 py-4 bg-white/10 backdrop-blur-md border-b border-white/20 rounded-b-2xl mt-6"
       >
         <div className="flex items-center gap-4">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+              title="Go Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
               <Video className="w-6 h-6 text-white" />
@@ -87,6 +120,14 @@ export default function Call({ currentUser, matchedUser }: { currentUser: UserIn
             </button>
           </div>
           
+          <button 
+            onClick={handleStartVideoCall}
+            className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-all border border-white/20 backdrop-blur-sm"
+          >
+            <Video className="w-4 h-4 inline mr-2" />
+            Start Video Call
+          </button>
+          
           <button className="px-4 py-2 rounded-lg bg-white/10 text-white font-semibold hover:bg-white/20 transition-all border border-white/20 backdrop-blur-sm">
             <Settings className="w-4 h-4 inline mr-2" />
             Settings
@@ -106,9 +147,32 @@ export default function Call({ currentUser, matchedUser }: { currentUser: UserIn
               activeView === 'both' ? 'flex-1' : 'w-full'
             } bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl overflow-hidden`}
           >
-            <ErrorBoundary>
-              <VideoCall onCallEnd={handleCallEnd} currentUser={currentUser} matchedUser={matchedUser} />
-            </ErrorBoundary>
+            <div className="h-full flex flex-col">
+              <div className="px-6 py-4 border-b border-white/20">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Video className="w-5 h-5" />
+                  Video Session Preview
+                </h3>
+                <p className="text-sm text-gray-300 mt-1">Click "Start Video Call" to begin</p>
+              </div>
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-white">
+                  <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Video className="w-10 h-10" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">Ready for Video Call</h3>
+                  <p className="text-gray-300 mb-4">
+                    Connect with {matchedUser.name} for a live video session
+                  </p>
+                  <button
+                    onClick={handleStartVideoCall}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                  >
+                    Start Video Call
+                  </button>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -182,7 +246,9 @@ export default function Call({ currentUser, matchedUser }: { currentUser: UserIn
             </div>
           </div>
           <div className="p-6">
-            <AIAssistant />
+            <ErrorBoundary>
+              <AIAssistant />
+            </ErrorBoundary>
           </div>
         </motion.div>
       )}
@@ -222,7 +288,7 @@ export default function Call({ currentUser, matchedUser }: { currentUser: UserIn
         <div className="flex items-center justify-center gap-4">
           <span>SkillLink Studio &copy; 2025</span>
           <span>•</span>
-          <span>Powered by WebRTC & PeerJS</span>
+          <span>Powered by WebRTC & Canvas</span>
           <span>•</span>
           <span>Built with ⚡ Bolt.new</span>
         </div>
