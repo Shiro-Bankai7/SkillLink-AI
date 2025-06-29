@@ -6,7 +6,13 @@ import { useState } from "react";
 import { Bot, Lightbulb, Mic, PhoneOff, Users, Video, MessageSquare, Monitor, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export default function Call() {
+interface UserInfo {
+  id: string;
+  name: string;
+  email?: string;
+}
+
+export default function Call({ currentUser, matchedUser }: { currentUser: UserInfo; matchedUser: UserInfo }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [suggestion, setSuggestion] = useState("Try using the whiteboard to sketch your ideas!");
   const [showSuggestion, setShowSuggestion] = useState(true);
@@ -101,7 +107,7 @@ export default function Call() {
             } bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl overflow-hidden`}
           >
             <ErrorBoundary>
-              <VideoCall onCallEnd={handleCallEnd} />
+              <VideoCall onCallEnd={handleCallEnd} currentUser={currentUser} matchedUser={matchedUser} />
             </ErrorBoundary>
           </motion.div>
         )}

@@ -74,6 +74,7 @@ export default function SmartMatchmaking() {
   const [selectedMatch, setSelectedMatch] = useState<MatchedUser | null>(null);
   const [showPreferences, setShowPreferences] = useState(false);
   const [showSkillLinkCall, setShowSkillLinkCall] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email?: string } | null>(null);
 
   useEffect(() => {
     fetchMatches();
@@ -93,6 +94,14 @@ export default function SmartMatchmaking() {
         .select('*')
         .eq('id', user.user.id)
         .single();
+
+      if (userProfile) {
+        setCurrentUser({
+          id: userProfile.id,
+          name: userProfile.email?.split('@')[0] || 'Anonymous',
+          email: userProfile.email || undefined
+        });
+      }
 
       // Get potential matches (no join, correct fields)
       const { data: profiles } = await supabase
@@ -730,19 +739,19 @@ export default function SmartMatchmaking() {
       >
         Start Live Video Session
       </button>
-            {showSkillLinkCall && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                <div className="bg-white rounded-lg shadow-lg p-4 max-w-3xl w-full">
-                  <button
-                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
-                    onClick={() => setShowSkillLinkCall(false)}
-                  >
-                    Close
-                  </button>
-                  <Call />
-                </div>
-              </div>
-            )}
+      {showSkillLinkCall && currentUser && selectedMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-lg p-4 max-w-3xl w-full">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              onClick={() => setShowSkillLinkCall(false)}
+            >
+              Close
+            </button>
+            <Call currentUser={currentUser} matchedUser={selectedMatch} />
           </div>
-        );
-      }
+        </div>
+      )}
+    </div>
+  );
+}

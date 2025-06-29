@@ -348,17 +348,14 @@ export default function SkillExchange() {
     try {
       // Generate a unique session ID
       const sessionId = `session_${Date.now()}_${user.id}_${provider.id}`;
-      // Prompt for sender mnemonic (in production, use wallet connect or secure input)
-      const senderMnemonic = prompt('Enter your Algorand mnemonic to start the session (for demo only):');
-      if (!senderMnemonic) throw new Error('Mnemonic required');
-      // Store session on blockchain
+      // Store session (simulate blockchain for demo)
       await BlockchainSessionService.storeSessionOnBlockchain({
         sessionId,
         participants: [user.id, provider.id],
         sessionType: 'skill_exchange',
         duration: 0,
         skills: provider.skills
-      }, senderMnemonic);
+      }, "demo");
       setBlockchainSessionId(sessionId);
       setActiveSessionProvider(provider);
       setShowSkillLinkCall(true);
@@ -725,7 +722,7 @@ export default function SkillExchange() {
       )}
 
       {/* Skill Link Call Modal (replaces old video call modal) */}
-      {showSkillLinkCall && activeSessionProvider && blockchainSessionId && (
+      {showSkillLinkCall && activeSessionProvider && blockchainSessionId && user && (
         <>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
             <div className="bg-white rounded-lg shadow-lg p-4 max-w-3xl w-full relative">
@@ -735,7 +732,10 @@ export default function SkillExchange() {
               >
                 Close
               </button>
-              <Call />
+              <Call
+                currentUser={user as any}
+                matchedUser={activeSessionProvider}
+              />
               <div className="mt-2 text-xs text-gray-500">Session ID: {blockchainSessionId} (encrypted & on-chain)</div>
             </div>
           </div>

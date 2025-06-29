@@ -25,6 +25,8 @@ import {
 interface VideoCallProps {
   roomId?: string;
   onCallEnd?: () => void;
+  currentUser: { id: string; name: string; email?: string };
+  matchedUser: { id: string; name: string; email?: string };
 }
 
 interface Participant {
@@ -36,7 +38,7 @@ interface Participant {
   videoEnabled: boolean;
 }
 
-export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
+export default function VideoCall({ roomId, onCallEnd, currentUser, matchedUser }: VideoCallProps) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -61,10 +63,27 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
 
   useEffect(() => {
     initializeCall();
+    // Initialize participants with the two real users
+    setParticipants([
+      {
+        id: currentUser.id,
+        name: currentUser.name || 'You',
+        isLocal: true,
+        audioEnabled: true,
+        videoEnabled: true
+      },
+      {
+        id: matchedUser.id,
+        name: matchedUser.name || 'Partner',
+        isLocal: false,
+        audioEnabled: true,
+        videoEnabled: true
+      }
+    ]);
     return () => {
       cleanup();
     };
-  }, []);
+  }, [currentUser, matchedUser]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -83,11 +102,21 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
       setIsConnecting(true);
       setConnectionError(null);
 
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: isVideoEnabled,
-        audio: isAudioEnabled
-      });
+      // Get user media with more permissive constraints
+      const constraints = {
+        video: isVideoEnabled ? {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user'
+        } : false,
+        audio: isAudioEnabled ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } : false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       setLocalStream(stream);
       
@@ -116,21 +145,37 @@ export default function VideoCall({ roomId, onCallEnd }: VideoCallProps) {
         addMockParticipant();
       }, 3000);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initializing video call:', error);
-      setConnectionError('Could not access camera/microphone. Please check permissions.');
+      
+      // More specific error handling
+      let errorMessage = 'Could not access camera/microphone. ';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Please allow camera and microphone permissions and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'No camera or microphone found.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage += 'Camera or microphone is already in use by another application.';
+      } else if (error.name === 'AbortError') {
+        errorMessage += 'Request was aborted. Please try again.';
+      } else {
+        errorMessage += 'Please check your device settings and try again.';
+      }
+      
+      setConnectionError(errorMessage);
       setIsConnecting(false);
     }
   };
 
-  const addMockParticipant = () => {
+  // Add mock participant, but use the matched user's id and name if provided
+  const addMockParticipant = (matchedUserId?: string, matchedUserName?: string) => {
     const mockParticipant: Participant = {
-      id: 'mock-user',
-      name: 'Demo User',
+      id: matchedUserId || `mock-user-${Date.now()}`,
+      name: matchedUserName || 'Demo User',
       audioEnabled: true,
       videoEnabled: true
     };
-    
     setParticipants(prev => [...prev, mockParticipant]);
   };
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Mic, 
-  MicOff, 
-  Camera, 
-  CameraOff, 
-  Volume2, 
+import {
+  Mic,
+  MicOff,
+  Camera,
+  CameraOff,
+  Volume2,
   VolumeX,
   Settings,
   MessageSquare,
@@ -19,7 +19,9 @@ import {
   Play,
   Square,
   RotateCcw,
-  Pause
+  Pause,
+  Sparkles,
+  UserCircle2
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
@@ -29,6 +31,8 @@ import { StreakService } from '../services/streakService';
 import { showNotification } from '../utils/notification';
 import BoltBadge from './BoltBadge';
 
+// --- AI Integration ---
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const agentId = "agent_01jy82m97xe2nv83sdtfpfmepc";
 const client = new ElevenLabsClient({ apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY });
 
@@ -45,6 +49,90 @@ interface SessionMetrics {
   eyeContactPercentage: number;
   confidenceScore: number;
   clarityScore: number;
+}
+
+// --- Floating AI Avatar ---
+const AIAssistantAvatar = ({ speaking }: { speaking: boolean }) => (
+  <motion.div
+    className="fixed bottom-8 right-8 z-50 flex flex-col items-center"
+    initial={{ opacity: 0, y: 40 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 40 }}
+  >
+    <motion.div
+      animate={speaking ? { scale: [1, 1.1, 1] } : { scale: 1 }}
+      transition={{ duration: 1, repeat: Infinity }}
+      className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full shadow-2xl p-2 border-4 border-white"
+    >
+      <Sparkles className="w-12 h-12 text-white" />
+    </motion.div>
+    <div className="mt-2 text-xs bg-white/80 px-3 py-1 rounded-full shadow text-gray-700 font-semibold">
+      {speaking ? 'AI is speaking...' : 'AI Coach'}
+    </div>
+  </motion.div>
+);
+
+// --- Animated Feedback Bubble ---
+const FeedbackBubble = ({ feedback }: { feedback: CoachingFeedback }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 20 }}
+    className={`absolute left-0 top-0 z-40 bg-white border shadow-lg rounded-xl px-4 py-3 min-w-[220px] max-w-xs ${
+      feedback.type === 'positive' ? 'border-green-300' : feedback.type === 'improvement' ? 'border-orange-300' : 'border-blue-300'
+    }`}
+    style={{ transform: 'translate(-110%, -60%)' }}
+  >
+    <div className="flex items-center gap-2 mb-1">
+      {feedback.type === 'positive' && <CheckCircle className="w-5 h-5 text-green-500" />}
+      {feedback.type === 'improvement' && <AlertCircle className="w-5 h-5 text-orange-500" />}
+      {feedback.type === 'tip' && <Lightbulb className="w-5 h-5 text-blue-500" />}
+      <span className="font-bold text-gray-800 capitalize">{feedback.type}</span>
+    </div>
+    <div className="text-gray-700 text-sm">{feedback.message}</div>
+    <div className="text-xs text-gray-400 mt-1 capitalize">{feedback.category.replace('_', ' ')}</div>
+  </motion.div>
+);
+
+// --- AI Feedback via OpenAI ---
+async function getAIFeedback(transcript: string): Promise<CoachingFeedback[]> {
+  const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+  if (!OPENAI_API_KEY) return [];
+  try {
+    const prompt = `You are an AI conversation coach. Analyze the following transcript and provide up to 2 pieces of feedback. Each feedback should be one of: positive, improvement, or tip, and should be categorized as speech, body_language, content, or engagement.\nTranscript: ${transcript}`;
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 200
+      })
+    });
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    // Parse feedbacks from AI response (simple split)
+    return text.split(/\n|\r/).filter(Boolean).map((line: string) => {
+      let type: CoachingFeedback['type'] = 'tip';
+      if (line.toLowerCase().includes('positive')) type = 'positive';
+      if (line.toLowerCase().includes('improvement')) type = 'improvement';
+      let category: CoachingFeedback['category'] = 'speech';
+      if (line.toLowerCase().includes('body')) category = 'body_language';
+      if (line.toLowerCase().includes('content')) category = 'content';
+      if (line.toLowerCase().includes('engagement')) category = 'engagement';
+      return {
+        timestamp: Date.now(),
+        type,
+        message: line.replace(/^(positive|improvement|tip):/i, '').trim(),
+        category
+      };
+    });
+  } catch (e) {
+    return [];
+  }
 }
 
 export default function ConversationCoach() {
@@ -499,81 +587,13 @@ export default function ConversationCoach() {
 
   // --- Main Component Render ---
   return (
-    <div className="relative">
-      {/* Random BoltBadge in top-left corner */}
-      <BoltBadge variant="corner" />
-      {/* Voice Session Overlay */}
+    <div className="relative min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-white pb-24">
+      {/* Floating AI Avatar */}
+      <AnimatePresence>{isSpeaking && <AIAssistantAvatar speaking={isSpeaking} />}</AnimatePresence>
+      {/* Feedback Bubble */}
       <AnimatePresence>
-        {isVoiceSession && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-700 flex flex-col items-center justify-center"
-          >
-            {/* Fun floating BoltBadge inside overlay */}
-            <BoltBadge variant="pulse" className="top-10 left-1/2 absolute" />
-            <div className="absolute top-4 right-4">
-              <button
-                onClick={stopVoiceSession}
-                className="bg-white/20 hover:bg-white/40 text-white rounded-full p-2"
-                title="End Session"
-              >
-                <Square className="w-8 h-8" />
-              </button>
-            </div>
-            <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto px-2 sm:px-0">
-              <div className="mb-6">
-                <h2 className="text-3xl font-bold text-white text-center">Conversation Coach</h2>
-                <p className="text-indigo-100 text-center mt-2">Voice-to-voice session. Speak or type and get instant AI feedback!</p>
-              </div>
-              {/* Voice Animation */}
-              {showVoiceAnim && <VoiceAnim />}
-              {/* Controls */}
-              <div className="flex items-center gap-6 mt-4">
-                {!isListening ? (
-                  <button
-                    onClick={startListening}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-6 shadow-lg transition"
-                  >
-                    <Mic className="w-8 h-8" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={stopListening}
-                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-full p-6 shadow-lg transition"
-                  >
-                    <Pause className="w-8 h-8" />
-                  </button>
-                )}
-              </div>
-              {/* Transcript */}
-              <div className="mt-8 w-full bg-white/10 rounded-xl p-4 text-white min-h-[60px]">
-                <div className="font-semibold mb-1">You:</div>
-                <div className="whitespace-pre-line">{voiceTranscript || <span className="text-indigo-200">Say something to start...</span>}</div>
-                <input
-                  type="text"
-                  className="mt-4 w-full rounded-lg px-3 py-2 bg-white/20 text-white placeholder-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  placeholder="Type your message if you prefer..."
-                  value={voiceInput}
-                  onChange={e => setVoiceInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      setVoiceTranscript(voiceInput);
-                      setVoiceInput('');
-                    }
-                  }}
-                />
-              </div>
-              {/* AI Response */}
-              {aiVoiceResponse && (
-                <div className="mt-4 w-full bg-white/10 rounded-xl p-4 text-white min-h-[60px]">
-                  <div className="font-semibold mb-1">AI:</div>
-                  <div className="whitespace-pre-line">{aiVoiceResponse}</div>
-                </div>
-              )}
-            </div>
-          </motion.div>
+        {realTimeFeedback.length > 0 && (
+          <FeedbackBubble feedback={realTimeFeedback[realTimeFeedback.length - 1]} />
         )}
       </AnimatePresence>
       {/* Main UI */}

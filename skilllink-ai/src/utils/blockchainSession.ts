@@ -62,6 +62,18 @@ export class BlockchainSessionService {
     duration: number;
     skills: string[];
   }, senderMnemonic: string): Promise<string> {
+    if (senderMnemonic === "demo") {
+      // Simulate blockchain storage for demo
+      await supabase.from('blockchain_sessions').insert({
+        session_id: sessionData.sessionId,
+        transaction_id: "demo-txid",
+        session_hash: "demo-hash",
+        participants: sessionData.participants,
+        encrypted: false,
+        created_at: new Date().toISOString()
+      });
+      return "demo-txid";
+    }
     try {
       const sender = algosdk.mnemonicToSecretKey(senderMnemonic);
       

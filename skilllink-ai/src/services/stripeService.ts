@@ -50,13 +50,16 @@ export class StripeService {
       const defaultSuccessUrl = `${window.location.origin}/subscription-success`;
       const defaultCancelUrl = `${window.location.origin}/pricing`;
 
+      const payload = {
+        price_id: request.priceId,
+        mode: request.mode,
+        success_url: request.successUrl || defaultSuccessUrl,
+        cancel_url: request.cancelUrl || defaultCancelUrl,
+      };
+      console.log('Stripe checkout payload:', payload);
+
       const response = await supabase.functions.invoke('stripe-checkout', {
-        body: {
-          price_id: request.priceId,
-          mode: request.mode,
-          success_url: request.successUrl || defaultSuccessUrl,
-          cancel_url: request.cancelUrl || defaultCancelUrl,
-        },
+        body: payload,
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -67,6 +70,8 @@ export class StripeService {
         if (response.data) {
           console.error('Stripe checkout response data:', response.data);
         }
+        // Log the full response for debugging
+        console.error('Stripe checkout full response:', response);
         throw new Error(response.error.message || 'Failed to create checkout session');
       }
 

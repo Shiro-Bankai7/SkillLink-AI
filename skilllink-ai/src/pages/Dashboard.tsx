@@ -46,14 +46,18 @@ import VoiceHelp from '../components/VoiceHelp';
 import TavusConversationSession from '../components/TavusConversationSession';
 import UserProfile from '../components/UserProfile';
 import SubscriptionStatus from '../components/SubscriptionStatus';
+import OnboardingScene from '../components/Onboarding';
 import { showNotification } from '../utils/notification';
 import { StreakService } from '../services/streakService';
 import { StripeService } from '../services/stripeService';
 import BoltBadge from '../components/BoltBadge';
 import Call from '../components/Call';
+import SillyLeaderboard, { type LeaderboardEntry } from '../components/SillyLeaderboard';
+import CommunityChat from '../components/CommunityChat';
 
 interface UserProfile {
   id: string;
+  email: string; // Added email property to match usage
   bio: string;
   skills: string[];
   lookingfor: string | string[];
@@ -117,9 +121,13 @@ export default function Dashboard() {
       progress: 30
     }
   ]);
+  
+  // Check if user is new (first time opening the app)
   const [showOnboarding, setShowOnboarding] = useState(() => {
-    return localStorage.getItem('skilllink_onboarding_complete') !== 'true';
+    const hasSeenOnboarding = localStorage.getItem('skilllink_onboarding_seen');
+    return !hasSeenOnboarding;
   });
+
   const [onboardingStep, setOnboardingStep] = useState(0);
   const onboardingSteps = [
     {
@@ -349,12 +357,16 @@ export default function Dashboard() {
     }
   };
 
+  const handleCompleteOnboarding = () => {
+    setShowOnboarding(false);
+    localStorage.setItem('skilllink_onboarding_seen', 'true');
+  };
+
   const handleNextOnboarding = () => {
     if (onboardingStep < onboardingSteps.length - 1) {
       setOnboardingStep(onboardingStep + 1);
     } else {
-      setShowOnboarding(false);
-      localStorage.setItem('skilllink_onboarding_complete', 'true');
+      handleCompleteOnboarding();
     }
   };
 
@@ -362,6 +374,11 @@ export default function Dashboard() {
   const [newTavusTopic, setNewTavusTopic] = useState('');
   const [newTavusType, setNewTavusType] = useState<'teaching' | 'coaching'>('teaching');
   const [createdTavus, setCreatedTavus] = useState<null | { topic: string; type: 'teaching' | 'coaching' }>(null);
+
+  // Show onboarding scene for new users
+  if (showOnboarding) {
+    return <OnboardingScene onComplete={handleCompleteOnboarding} />;
+  }
 
   if (showProfile) {
     return (
@@ -400,36 +417,6 @@ export default function Dashboard() {
   return (
     <>
     <div className="min-h-screen bg-gray-50">
-      {/* Onboarding Modal */}
-      {showOnboarding && (
-        <Dialog open={showOnboarding} onClose={() => {}} className="fixed z-50 inset-0 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-40" />
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-8 z-10">
-              <Dialog.Title className="text-2xl font-bold mb-2 text-indigo-700">
-                {onboardingSteps[onboardingStep].title}
-              </Dialog.Title>
-              <Dialog.Description className="mb-6 text-gray-600">
-                {onboardingSteps[onboardingStep].description}
-              </Dialog.Description>
-              <div className="flex justify-between items-center">
-                <div className="flex space-x-1">
-                  {onboardingSteps.map((_, idx) => (
-                    <span key={idx} className={`h-2 w-2 rounded-full ${idx === onboardingStep ? 'bg-indigo-500' : 'bg-gray-300'}`}></span>
-                  ))}
-                </div>
-                <button
-                  onClick={handleNextOnboarding}
-                  className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-                >
-                  {onboardingStep === onboardingSteps.length - 1 ? 'Finish' : 'Next'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -704,6 +691,7 @@ export default function Dashboard() {
                     View All
                   </button>
                 </div>
+                
                 <div className="space-y-4">
                   {userAchievements.map((achievement) => (
                     <div key={achievement.id} className="flex items-center space-x-4">
@@ -740,7 +728,7 @@ export default function Dashboard() {
                 Start Quick Session
               </button>
             </div>
-            {showQuickSession && (
+            {showQuickSession && user && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                 <div className="bg-white rounded-lg shadow-lg p-4 max-w-3xl w-full relative">
                   <button
@@ -749,7 +737,18 @@ export default function Dashboard() {
                   >
                     Close
                   </button>
-                  <Call />
+                  <Call
+                    currentUser={{
+                      id: user.id,
+                      name: user.email?.split('@')[0] || 'Anonymous',
+                      email: user.email
+                    }}
+                    matchedUser={{
+                      id: profile?.id || user.id,
+                      name: profile?.email?.split('@')[0] || 'Anonymous',
+                      email: profile?.email || user.email
+                    }}
+                  />
                 </div>
               </div>
             )}
@@ -959,28 +958,14 @@ export default function Dashboard() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Silly Skill Mode</h3>
               <SillySkillMode />
             </div>
-
-            {/* Community Leaderboard */}
+            {/* Community Leaderboard (SillySkillMode leaderboard) */}
             <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Community Leaderboard</h3>
-              <div className="space-y-3">
-                {[
-                  { rank: 1, name: 'Alex Thompson', points: 2450, badge: '🏆' },
-                  { rank: 2, name: 'Maria Garcia', points: 2380, badge: '🥈' },
-                  { rank: 3, name: 'David Kim', points: 2290, badge: '🥉' },
-                  { rank: 156, name: 'You', points: 890, badge: '⭐' }
-                ].map((user, index) => (
-                  <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${user.name === 'You' ? 'bg-indigo-50 border border-indigo-200' : 'bg-gray-50'}`}>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-lg">{user.badge}</span>
-                      <div>
-                        <span className="font-medium text-gray-900">#{user.rank} {user.name}</span>
-                      </div>
-                    </div>
-                    <span className="font-semibold text-indigo-600">{user.points} pts</span>
-                  </div>
-                ))}
-              </div>
+              <SillyLeaderboard leaderboard={[]} title="Community Leaderboard" />
+            </div>
+            {/* Community Chat */}
+            <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Community Skill Marketing Chat</h3>
+              <CommunityChat />
             </div>
           </div>
         )}
@@ -1063,19 +1048,22 @@ export default function Dashboard() {
         { id: 'sessions', label: 'Sessions', icon: Calendar },
         { id: 'practice', label: 'Practice', icon: Video },
         { id: 'community', label: 'Community', icon: Users },
-        { id: 'progress', label: 'Progress', icon: BarChart3 },
-      ].map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
-          className={`flex flex-col items-center flex-1 px-1 py-1 text-xs font-medium capitalize transition-colors ${
-            activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-500'
-          }`}
-        >
-          <tab.icon className={`w-6 h-6 mb-1 ${activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400'}`} />
-          {tab.label}
-        </button>
-      ))}
+        { id: 'progress', label: 'Progress', icon: BarChart3 }
+      ].map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex flex-col items-center flex-1 px-1 py-1 text-xs font-medium capitalize transition-colors ${
+              activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-500'
+            }`}
+          >
+            <Icon className={`w-6 h-6 mb-1 ${activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400'}`} />
+            {tab.label}
+          </button>
+        );
+      })}
     </nav>
     </>
   );

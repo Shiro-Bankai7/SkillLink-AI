@@ -76,7 +76,7 @@ export default function VoiceHelp() {
     }
   }, []);
 
-  // Gemini AI call (free)
+  // Use Gemini for all AI responses
   async function getGeminiResponse(prompt: string): Promise<string> {
     try {
       const response = await GeminiService.answerLearningQuestion(prompt);
@@ -84,35 +84,6 @@ export default function VoiceHelp() {
     } catch (err) {
       console.error("Gemini error:", err);
       return "I'm having trouble connecting right now. How can I help you with your learning goals?";
-    }
-  }
-
-  // Hugging Face LLM call (mock for now)
-  async function getHuggingFaceResponse(prompt: string): Promise<string> {
-    try {
-      // Mock response for now since the API endpoint might not be working
-      const responses = [
-        "That's a great question! I'd love to help you learn more about that topic.",
-        "Let me think about that... Here's what I can suggest for your learning journey.",
-        "Interesting! I can definitely help you practice and improve in that area.",
-        "That's something many learners ask about. Here's my advice..."
-      ];
-      return responses[Math.floor(Math.random() * responses.length)];
-    } catch (err) {
-      console.error("Hugging Face error:", err);
-      return "Sorry, I could not connect to the coach right now.";
-    }
-  }
-
-  // ElevenLabs conversation (premium)
-  async function getElevenLabsResponse(prompt: string): Promise<string> {
-    try {
-      // This would use the ElevenLabs conversational AI
-      // For now, return a premium response
-      return "🎙️ Premium ElevenLabs AI: " + await getGeminiResponse(prompt);
-    } catch (err) {
-      console.error("ElevenLabs error:", err);
-      return "Premium voice AI is temporarily unavailable.";
     }
   }
 
@@ -169,21 +140,16 @@ export default function VoiceHelp() {
       let responseText = '';
       let modelUsed = selectedModel;
 
-      // Get AI response based on selected model
-      switch (selectedModel) {
-        case 'gemini':
-          responseText = await getGeminiResponse(messageText);
-          break;
-        case 'huggingface':
-          responseText = await getHuggingFaceResponse(messageText);
-          break;
-        case 'elevenlabs':
-          responseText = await getElevenLabsResponse(messageText);
-          await incrementUsage('aiCoachingSessions');
-          break;
-        default:
-          responseText = await getGeminiResponse(messageText);
-          modelUsed = 'gemini';
+      // Use Gemini for all responses now
+      responseText = await getGeminiResponse(messageText);
+      modelUsed = 'gemini';
+
+      // For premium models, add special prefix
+      if (selectedModel === 'elevenlabs') {
+        responseText = '🎙️ Premium ElevenLabs AI: ' + responseText;
+        await incrementUsage('aiCoachingSessions');
+      } else if (selectedModel === 'huggingface') {
+        responseText = '🤗 HuggingFace AI: ' + responseText;
       }
 
       const agentMessage: Message = {
